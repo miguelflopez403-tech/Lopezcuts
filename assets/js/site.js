@@ -100,7 +100,7 @@
     const all = { title: 'Portfolio', photos: photos.map(x => x.p) };
     const track = h('div', { class: 'car-track', tabindex: '0', 'aria-label': 'Portfolio photos, scroll sideways' },
       photos.map((x, i) => h('button', { class: 'car-card', type: 'button', 'aria-label': `${x.box}, open photo`, onclick: () => { LB = { box: all, i, labels: photos.map(y => y.box) }; lbShow(); lb.showModal(); } },
-        h('img', { src: x.p.image_url, alt: x.box, loading: i < 6 ? 'eager' : 'lazy', decoding: 'async' }),
+        h('img', { src: x.p.image_url, alt: `${x.box} by Lopez Cuts, barber in Salt Lake City`, loading: i < 6 ? 'eager' : 'lazy', decoding: 'async' }),
         h('span', { class: 'car-cap' }, x.box))));
     const step = dir => { const card = track.querySelector('.car-card'); const w = card ? card.getBoundingClientRect().width + 14 : 300;
       const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
