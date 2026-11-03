@@ -54,7 +54,7 @@
   const isOwner = () => ME?.role === 'owner';
   const isAdmin = () => ME?.role === 'owner' || ME?.role === 'manager';
   const S = () => (D.settings && D.settings[0]) || {};
-  const UI = { view: 'today', calAnchor: T.today(), calStaff: 'all', clientQ: '', clientFilter: 'all', clientSort: 'last', moneyRange: 'month', setupTab: null, revFilter: 'pending' };
+  const UI = { view: 'today', calAnchor: T.today(), calStaff: 'all', clientQ: '', clientFilter: 'all', clientSort: 'last', schedPast: false, moneyRange: 'month', setupTab: null, revFilter: 'pending' };
 
   // ===================================================================
   //  AUTH SCREENS
@@ -249,6 +249,7 @@
   // ===================================================================
   const VIEWS = [
     { id: 'today', label: 'Today', icon: 'today', render: viewToday },
+    { id: 'schedule', label: 'Schedule', icon: 'clock', render: viewSchedule },
     { id: 'calendar', label: 'Calendar', icon: 'cal', render: viewCalendar },
     { id: 'clients', label: 'Clients', icon: 'users', render: viewClients },
     { id: 'money', label: 'Money', icon: 'money', render: viewMoney, admin: true },
@@ -676,6 +677,50 @@
   // ===================================================================
   //  CALENDAR
   // ===================================================================
+  // ---------------- Schedule: a scrolling day-by-day list (phone friendly)
+  function viewSchedule() {
+    const today = T.today(); const now = Date.now();
+    const mine = a => isAdmin() || a.staff_id === ME.staff_id;
+    const appts = D.appointments.filter(a => a.status !== 'cancelled' && mine(a));
+    const byDay = new Map(); appts.forEach(a => { const d = T.day(a.starts_at); (byDay.get(d) || byDay.set(d, []).get(d)).push(a); });
+    const workDays = new Set(D.working_hours.filter(w => isAdmin() || w.staff_id === ME.staff_id).map(w => w.weekday));
+    const off = d => D.time_off.some(t => T.day(t.starts_at) <= d && T.day(new Date(+new Date(t.ends_at) - 1)) >= d);
+    const first = UI.schedPast ? T.addDays(today, -14) : today;
+    const lastBooked = [...byDay.keys()].sort().at(-1) || today;
+    const last = [T.addDays(today, 30), lastBooked].sort().at(-1);
+    const est = list => list.filter(a => a.status !== 'no_show').reduce((t, a) => t + (+a.price || 0), 0);
+    const days = [];
+    for (let d = first; d <= last; d = T.addDays(d, 1)) {
+      const list = (byDay.get(d) || []).sort(by('starts_at'));
+      const working = workDays.has(T.weekday(d)) && !off(d);
+      if (list.length || (working && d >= today)) days.push({ d, list, working });
+    }
+    const wk = T.addDays(today, 6); const weekList = appts.filter(a => { const d = T.day(a.starts_at); return d >= today && d <= wk; });
+    const head = h('div', { class: 'sched-sum' },
+      h('div', {}, h('b', {}, String(weekList.filter(a => a.status !== 'no_show').length)), h('span', {}, 'clients next 7 days')),
+      isAdmin() ? h('div', {}, h('b', {}, money(est(weekList))), h('span', {}, 'estimated next 7 days')) : null,
+      h('button', { class: 'btn sm', type: 'button', onclick: () => { UI.schedPast = !UI.schedPast; render(); } }, UI.schedPast ? 'Hide past days' : 'Show past 2 weeks'));
+    const dayEl = ({ d, list, working }) => {
+      const isToday = d === today;
+      const label = isToday ? 'Today' : d === T.addDays(today, 1) ? 'Tomorrow' : T.dayLabel(d, { weekday: 'long' });
+      const live = list.filter(a => a.status !== 'no_show');
+      return h('section', { class: 'sched-day' + (isToday ? ' today' : '') + (d < today ? ' past' : ''), id: 'day-' + d },
+        h('div', { class: 'sched-h' },
+          h('div', {}, h('div', { class: 'sd-name' }, label), h('div', { class: 'sd-date' }, T.dayLabel(d, { month: 'long', day: 'numeric' }))),
+          h('div', { class: 'sd-tot' }, h('span', {}, live.length ? `${live.length} client${live.length === 1 ? '' : 's'}` : 'No bookings'), isAdmin() && live.length ? h('b', {}, money(est(live))) : null)),
+        list.length ? h('div', { class: 'sched-list' }, list.map(a => {
+          const c = client(a.client_id); const end = +new Date(a.ends_at); const isNow = +new Date(a.starts_at) <= now && end > now;
+          return h('button', { class: 'sched-row' + (end < now ? ' done' : '') + (isNow ? ' now' : ''), type: 'button', onclick: () => openAppt(a) },
+            h('span', { class: 'sr-time' }, T.time(a.starts_at)),
+            h('span', { class: 'sr-main' }, h('b', {}, c.full_name), h('span', {}, svcName(a) + (a.new_client ? ' · first visit' : ''))),
+            h('span', { class: 'sr-right' }, isAdmin() ? h('b', {}, money(a.price)) : null, a.status !== 'booked' ? pill(a.status) : null));
+        })) : h('button', { class: 'sched-open', type: 'button', onclick: () => openNewBooking({ day: d }) }, working ? 'Open · tap to add a booking' : 'Tap to add a booking'));
+    };
+    const out = [head, h('div', { class: 'sched' }, days.map(dayEl))];
+    requestAnimationFrame(() => { if (UI.schedPast) $('#day-' + today)?.scrollIntoView({ block: 'start' }); });
+    return out;
+  }
+
   function viewCalendar() {
     const one = innerWidth < 760; const n = one ? 1 : 7;
     const start = one ? UI.calAnchor : weekStart(UI.calAnchor);
