@@ -474,3 +474,21 @@ dialog::backdrop { background: rgb(8 7 6 / 62%); backdrop-filter: blur(4px); }
   .ticket-perf { margin: 24px -30px; }
   .ticket .btn { padding-top: 17px; padding-bottom: 17px; font-size: 1.08rem; }
 }
+
+/* Cut-types ticker at the top of the page */
+.marquee.top { border-top: 0; border-bottom: 1px solid var(--line-ink); padding: 12px 0; }
+.marquee.top .marquee-track { animation-duration: 60s; font-size: 1.3rem; }
+@media (max-width: 600px) { .marquee.top { padding: 10px 0; } .marquee.top .marquee-track { font-size: 1.1rem; gap: 20px; animation-duration: 48s; } }
+
+/* Portfolio carousel */
+.gallery-car { margin-bottom: 26px; }
+.carousel { position: relative; }
+.car-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 2px; padding: 2px 2px 10px; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.car-track::-webkit-scrollbar { display: none; }
+.car-card { flex: 0 0 clamp(220px, 23%, 300px); aspect-ratio: 4 / 5; position: relative; border: 0; padding: 0; border-radius: var(--radius); overflow: hidden; background: var(--ink-2); scroll-snap-align: start; cursor: zoom-in; isolation: isolate; }
+.car-card img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .8s var(--ease); }
+.car-card:hover img { transform: scale(1.04); }
+.car-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 36px 14px 12px; background: linear-gradient(transparent, rgb(10 9 8 / 78%)); color: #f3ecdc; font: 400 1.3rem/1 var(--display); letter-spacing: .04em; text-align: left; }
+.car-nav { position: absolute; top: calc(50% - 5px); transform: translateY(-50%); z-index: 2; background: rgb(10 9 8 / 60%); color: #f3ecdc; border-color: rgb(255 255 255 / 18%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.car-nav.prev { left: 10px; } .car-nav.next { right: 10px; }
+@media (max-width: 600px) { .car-card { flex-basis: 72vw; } .car-nav { display: none; } }

@@ -81,18 +81,43 @@
     });
     return [...map.values()];
   }
+  // All photos cycle through one carousel. Boxes take turns (each box's cover first) so the mix stays varied.
+  function carouselPhotos() {
+    const boxes = galleryBoxes().filter(b => b.photos.length);
+    const out = []; let i = 0, more = true;
+    while (more) { more = false; boxes.forEach(b => { if (b.photos[i]) { out.push({ p: b.photos[i], box: b.title }); more = true; } }); i++; }
+    return out;
+  }
+  let carTimer = null;
   function renderGallery() {
-    const boxes = galleryBoxes();
-    $('#placeholderNote').hidden = !boxes.some(b => !b.photos.length);
-    const tiles = boxes.map((b, i) => {
-      const cover = b.photos[0];
-      return h('button', { class: 'tile', type: 'button', 'aria-label': cover ? `${b.title}, ${b.photos.length} photo${b.photos.length > 1 ? 's' : ''}` : `${b.title} (placeholder)`, onclick: () => openLightbox(b, i) },
-        cover ? h('img', { src: cover.image_url, alt: b.title, loading: 'lazy' }) : [placeholderArt(i), icon('scissors', 'scissor')],
-        !cover && h('span', { class: 'badge' }, 'Placeholder'),
-        cover && b.photos.length > 1 && h('span', { class: 'badge count' }, `${b.photos.length} photos`),
-        h('span', { class: 'cap' }, h('b', {}, b.title), b.desc && !/^placeholder/i.test(b.desc) ? h('span', {}, b.desc) : null));
-    });
-    $('#gallery').replaceChildren(...tiles);
+    const boxes = galleryBoxes(), photos = carouselPhotos();
+    $('#placeholderNote').hidden = !!photos.length || !boxes.length;
+    if (!photos.length) {
+      $('#gallery').className = 'gallery';
+      $('#gallery').replaceChildren(...boxes.map((b, i) => h('button', { class: 'tile', type: 'button', 'aria-label': `${b.title} (placeholder)`, onclick: () => openLightbox(b, i) }, placeholderArt(i), icon('scissors', 'scissor'), h('span', { class: 'badge' }, 'Placeholder'), h('span', { class: 'cap' }, h('b', {}, b.title)))));
+      return;
+    }
+    const all = { title: 'Portfolio', photos: photos.map(x => x.p) };
+    const track = h('div', { class: 'car-track', tabindex: '0', 'aria-label': 'Portfolio photos, scroll sideways' },
+      photos.map((x, i) => h('button', { class: 'car-card', type: 'button', 'aria-label': `${x.box}, open photo`, onclick: () => { LB = { box: all, i, labels: photos.map(y => y.box) }; lbShow(); lb.showModal(); } },
+        h('img', { src: x.p.image_url, alt: x.box, loading: i < 6 ? 'eager' : 'lazy', decoding: 'async' }),
+        h('span', { class: 'car-cap' }, x.box))));
+    const step = dir => { const card = track.querySelector('.car-card'); const w = card ? card.getBoundingClientRect().width + 14 : 300;
+      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
+      if (dir > 0 && atEnd) track.scrollTo({ left: 0, behavior: 'smooth' }); else track.scrollBy({ left: dir * w, behavior: 'smooth' }); };
+    const wrap = h('div', { class: 'carousel' }, track,
+      h('button', { class: 'icon-btn car-nav prev', type: 'button', 'aria-label': 'Previous photos', onclick: () => { step(-1); hold(); } }, icon('back')),
+      h('button', { class: 'icon-btn car-nav next', type: 'button', 'aria-label': 'Next photos', onclick: () => { step(1); hold(); } }, icon('arrow')));
+    $('#gallery').className = 'gallery-car';
+    $('#gallery').replaceChildren(wrap);
+    // Auto-advance every few seconds; pause while someone is touching, hovering or the section is off screen.
+    let paused = false, visible = false, holdUntil = 0;
+    const hold = () => { holdUntil = Date.now() + 6000; };
+    ['pointerenter', 'touchstart', 'focusin'].forEach(ev => wrap.addEventListener(ev, () => { paused = true; }, { passive: true }));
+    ['pointerleave', 'touchend', 'focusout'].forEach(ev => wrap.addEventListener(ev, () => { paused = false; hold(); }, { passive: true }));
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(wrap); else visible = true;
+    clearInterval(carTimer);
+    if (!reduced) carTimer = setInterval(() => { if (visible && !paused && Date.now() > holdUntil && !document.hidden && !lb.open) step(1); }, 2800);
   }
   const lb = $('#lightbox'); let LB = { box: null, i: 0 };
   function lbShow() {
@@ -100,7 +125,8 @@
     $('#lbMedia').replaceChildren(h('img', { src: p.image_url, alt: `${box.title}, photo ${i + 1}` }),
       box.photos.length > 1 ? h('button', { class: 'icon-btn lb-nav prev', type: 'button', 'aria-label': 'Previous photo', onclick: () => lbStep(-1) }, icon('back')) : null,
       box.photos.length > 1 ? h('button', { class: 'icon-btn lb-nav next', type: 'button', 'aria-label': 'Next photo', onclick: () => lbStep(1) }, icon('arrow')) : null);
-    $('#lbCap').textContent = box.photos.length > 1 ? `${box.title} · ${i + 1} of ${box.photos.length}` : box.title;
+    const label = LB.labels ? LB.labels[i] : box.title;
+    $('#lbCap').textContent = box.photos.length > 1 ? `${label} · ${i + 1} of ${box.photos.length}` : label;
     const nx = box.photos[(i + 1) % box.photos.length]; if (nx) { const pre = new Image(); pre.src = nx.image_url; }
   }
   function lbStep(d) { const n = LB.box.photos.length; LB.i = (LB.i + d + n) % n; lbShow(); }
@@ -165,7 +191,7 @@
   async function nextOpening() {
     const staff = state.staff[0]; const cut = state.services.find(s => !s.is_addon && s.bookable);
     if (!staff || !cut) return;
-    if (state.settings && !state.settings.booking_open) { $('#nextWhen').textContent = 'Booking paused'; $('#nextSub').textContent = 'Text (571) 599-9297 to book'; return; }
+    if (state.settings && !state.settings.booking_open) { $('#nextWhen').textContent = 'Booking paused'; $('#nextSub').textContent = 'DM @lopezcuts.dmv to book'; return; }
     try {
       const days = await LC.rpc('get_open_days', { p_staff_id: staff.id, p_from: T.today(), p_days: 14, p_duration: cut.duration_min });
       const d = days.find(x => x.openings > 0);
@@ -279,7 +305,7 @@
       h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : (T.weekday(d.day) === 0 ? 'Closed' : 'Full')))))
       : h('div', { class: 'days' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: 'width:70px;height:84px;flex:none' }))));
     if (!B.days.length) return out;
-    if (!B.day) { out.push(h('div', { class: 'empty-slots' }, 'No openings in the next few weeks. Text (571) 599-9297 and Miguel will try to fit you in.')); return out; }
+    if (!B.day) { out.push(h('div', { class: 'empty-slots' }, 'No openings in the next few weeks. DM @lopezcuts.dmv on Instagram and Miguel will try to fit you in.')); return out; }
     out.push(h('p', { class: 'opt-label' }, T.dayLabel(B.day, { weekday: 'long', month: 'long', day: 'numeric' })));
     if (!B.slots) { out.push(h('div', { class: 'slots' }, Array.from({ length: 8 }, () => h('div', { class: 'skeleton' })))); return out; }
     if (!B.slots.length) { out.push(h('div', { class: 'empty-slots' }, 'That day just filled up. Try another day.')); return out; }
@@ -362,7 +388,7 @@
     if (!bk) { forgetBooking(token); }
     else if (['booked', 'confirmed', 'completed'].includes(bk.status) && bk.starts_at) rememberBooking({ token, starts_at: bk.starts_at, ends_at: bk.ends_at }, bk.reviewed ? { reviewed: true } : {});
     else forgetBooking(token);
-    if (!bk) { body.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find that booking. Check the link or text (571) 599-9297.')); return; }
+    if (!bk) { body.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find that booking. Check the link or DM @lopezcuts.dmv on Instagram.')); return; }
     const label = { booked: 'Booked', confirmed: 'Confirmed', completed: 'Completed', no_show: 'Missed', cancelled: 'Cancelled' }[bk.status];
     const view = [
       h('div', { class: 'big-ticket' }, h('span', { class: 'price' }, money(bk.price)), h('span', { class: 'when' }, T.date(bk.starts_at, { weekday: 'long', month: 'short', day: 'numeric' })), h('span', { style: 'font:400 1.6rem/1 var(--display)' }, `${T.time(bk.starts_at)} – ${T.time(bk.ends_at)}`), h('span', { class: 'what' }, `${bk.service}${bk.addons?.length ? ' + ' + bk.addons.join(' + ') : ''} · ${bk.staff}`)),
@@ -376,7 +402,7 @@
       const confirmRow = h('div', { class: 'field', hidden: true }, h('label', { for: 'cReason' }, 'Cancel this appointment?'), reason,
         h('div', { class: 'done-actions', style: 'justify-content:flex-start' }, h('button', { class: 'btn ink', type: 'button', onclick: () => act(() => LC.rpc('cancel_booking', { p_token: token, p_reason: reason.value }), 'Cancelled') }, 'Yes, cancel it'), h('button', { class: 'btn ghost-dark', type: 'button', onclick: () => { confirmRow.hidden = true; } }, 'Keep it')));
       view.push(h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { confirmRow.hidden = false; reason.focus(); } }, 'Cancel appointment'), confirmRow);
-    } else if (['booked', 'confirmed'].includes(bk.status)) view.push(h('p', { class: 'muted small' }, 'It\'s too close to your appointment to cancel online. Please text (571) 599-9297.'));
+    } else if (['booked', 'confirmed'].includes(bk.status)) view.push(h('p', { class: 'muted small' }, 'It\'s too close to your appointment to cancel online. Please reply to Miguel\'s text.'));
     if (bk.can_review) {
       let rating = 5; const stars = h('div', { class: 'star-pick', role: 'radiogroup', 'aria-label': 'Rating' });
       const paint = () => [...stars.children].forEach((b, i) => { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', String(i + 1 === rating)); });
@@ -411,7 +437,7 @@
     const inp = h('input', { id: 'findLink', placeholder: 'Paste your booking link' });
     body.replaceChildren(h('div', { class: 'step-anim' }, h('p', { class: 'muted' }, 'Your booking link was shown when you booked and is in the confirmation text from Miguel.'), h('div', { class: 'field' }, h('label', { for: 'findLink' }, 'Booking link'), inp),
       h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, 'Open booking'),
-      h('p', { class: 'muted small' }, 'Lost it? Text (571) 599-9297.')));
+      h('p', { class: 'muted small' }, 'Lost it? Reply to Miguel\'s text or DM @lopezcuts.dmv on Instagram.')));
   });
 
   // ---------------- Leave a review ----------------
@@ -428,7 +454,7 @@
       h('p', { class: 'muted small' }, 'It\'s in your booking confirmation and in Miguel\'s thank-you text. Tapping it opens the review form.'),
       h('div', { class: 'field' }, h('label', { for: 'reviewLink' }, 'Booking link'), inp),
       h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, icon('star'), 'Write my review'),
-      h('p', { class: 'muted small' }, 'Can\'t find it? Text (571) 599-9297 and Miguel will send you a review link.')));
+      h('p', { class: 'muted small' }, 'Can\'t find it? Reply to Miguel\'s text and he\'ll send you a review link.')));
   }
   document.addEventListener('click', e => { const t = e.target.closest('[data-review]'); if (t) { e.preventDefault(); openReview(); } });
   if (location.hash === '#review') setTimeout(openReview, 0);
@@ -448,8 +474,8 @@
       renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); showMyBooking(); checkHash();
     } catch (e) {
       console.error(e);
-      $('#nextWhen').textContent = 'Text to book'; $('#nextSub').textContent = '(571) 599-9297';
-      toast('Online booking is having trouble. Text (571) 599-9297 to book.');
+      $('#nextWhen').textContent = 'DM to book'; $('#nextSub').textContent = '@lopezcuts.dmv on Instagram';
+      toast('Online booking is having trouble. DM @lopezcuts.dmv on Instagram to book.');
       setupReveal();
     }
   }
