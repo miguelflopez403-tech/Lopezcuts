@@ -232,8 +232,8 @@
     const avg = count ? (((+s.booksy_rating || 5) * (+s.booksy_review_count || 0)) + site.reduce((t, r) => t + r.rating, 0)) / count : 5;
     $('#ratingBadge .rating-n').textContent = avg.toFixed(1);
     $('#ratingCount').textContent = site.length ? `${count} reviews (Booksy + Lopezcuts)` : `${count} reviews on Booksy`;
-    $('#heroRating').textContent = `${count} reviews`;
-    $('.hero-facts li:last-child b').textContent = avg.toFixed(1);
+    $('#heroRating').textContent = `${avg.toFixed(1)} · ${count} reviews`;
+    const ha = $('#heroAvg'); if (ha) ha.textContent = avg.toFixed(1);
   }
 
   // ---------------- Prices from the database ----------------
@@ -248,7 +248,6 @@
       if (b[0]) b[0].textContent = money(firstPrice);
       if (b[1] && back) b[1].textContent = money(back.price);
       $('.tag', feat).textContent = `Up to ${(back || first).duration_min} min`;
-      $('.hero-facts li:first-child b').textContent = money(firstPrice);
     }
     if (home) {
       const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · ${home.duration_min} min`;
@@ -271,9 +270,17 @@
       const slots = await LC.rpc('get_available_slots', { p_staff_id: staff.id, p_day: d.day, p_duration: cut.duration_min });
       const s = slots[0]; if (!s) return;
       const rel = d.day === T.today() ? 'Today' : d.day === T.addDays(T.today(), 1) ? 'Tomorrow' : T.dayLabel(d.day, { weekday: 'long' });
-      $('#nextWhen').replaceChildren(h('small', {}, rel === 'Today' || rel === 'Tomorrow' ? `${rel}, ${T.dayLabel(d.day, { month: 'short', day: 'numeric' })}` : T.dayLabel(d.day, { weekday: 'long', month: 'short', day: 'numeric' })), T.time(s));
-      $('#nextSub').textContent = `${staff.display_name} · ${cut.name} · ${d.openings} open ${d.openings === 1 ? 'spot' : 'spots'} that day`;
+      const date = rel === 'Today' || rel === 'Tomorrow' ? `${rel}, ${T.dayLabel(d.day, { month: 'short', day: 'numeric' })}` : T.dayLabel(d.day, { weekday: 'short', month: 'short', day: 'numeric' });
+      $('#nextWhen').replaceChildren(h('small', {}, date), h('em', {}, T.time(s)));
+      const left = `${d.openings} ${d.openings === 1 ? 'spot' : 'spots'} left that day`;
+      const sub = $('#nextSub'), cd = h('b', {}); sub.replaceChildren('Opens in ', cd, ' · ' + left);
+      const at = new Date(s).getTime();
+      const tick = () => { const ms = at - Date.now(); if (ms <= 0) { cd.textContent = 'now'; return; }
+        const dd = Math.floor(ms / 864e5), hh = Math.floor(ms % 864e5 / 36e5), mm = Math.floor(ms % 36e5 / 6e4), ss = Math.floor(ms % 6e4 / 1e3);
+        const th = dd * 24 + hh; cd.textContent = th >= 48 ? `${dd} days` : th ? `${th}h ${String(mm).padStart(2, '0')}m` : `${mm}m ${String(ss).padStart(2, '0')}s`; };
+      tick(); clearInterval(nextOpening.t); nextOpening.t = setInterval(tick, 1000);
       const btn = $('#nextBtn'); btn.dataset.slot = s; btn.dataset.day = d.day;
+      btn.replaceChildren(`Grab ${T.time(s)}`, icon('arrow'));
     } catch (e) { $('#nextWhen').textContent = 'Book online'; $('#nextSub').textContent = 'See all open times'; }
   }
 

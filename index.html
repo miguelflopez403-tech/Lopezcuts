@@ -119,7 +119,7 @@
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bebas+Neue&family=Cinzel:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bebas+Neue&family=Cinzel:wght@600;700&family=Rajdhani:wght@500;600&display=swap">
 <link rel="stylesheet" href="assets/css/site.css">
 </head>
 <body>
@@ -171,37 +171,38 @@
     </div>
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="dot" aria-hidden="true"></span>Built in the DMV · Sharpened in Salt Lake</p>
+        <p class="eyebrow"><i class="pole-mini" aria-hidden="true"></i>Built in the DMV · Sharpened in Salt Lake</p>
         <h1 class="hero-title" aria-label="Look good. Feel better.">
           <span class="line"><span>Look</span> <span>good.</span></span>
           <span class="line gold"><span>Feel</span> <span>better.</span></span>
         </h1>
         <p class="lead">Clipper or scissors, fade or flow: every cut gets my full focus, down to the final mirror check. Book your chair in under a minute.</p>
-        <div class="hero-cta">
-          <button class="btn gold lg" type="button" data-book><svg class="ic"><use href="#i-cal"/></svg>Book your cut</button>
-          <a class="btn ghost lg" href="#work">See the work</a>
+        <aside class="nx" aria-live="polite" aria-label="Next opening">
+          <div class="nx-info">
+            <span class="nx-label"><span class="live-dot" aria-hidden="true"></span>Next opening</span>
+            <span class="nx-when" id="nextWhen"><span class="shimmer">Checking the book…</span></span>
+            <span class="nx-sub" id="nextSub">Live from Miguel's calendar</span>
+          </div>
+          <button class="btn gold" type="button" id="nextBtn" data-book>Book your cut<svg class="ic"><use href="#i-arrow"/></svg></button>
+        </aside>
+        <div class="hero-links">
+          <button class="link-btn" type="button" data-book>See all open times</button>
+          <a class="link-btn" href="#work">See the work</a>
+          <span class="trust"><span class="stars" aria-hidden="true">★★★★★</span><span id="heroRating">34 reviews</span></span>
         </div>
-        <ul class="hero-facts" aria-label="Quick facts">
-          <li><b>$25</b><span>first cut</span></li>
-          <li><b>40</b><span>minutes, max</span></li>
-          <li><b>$0</b><span>touch-ups</span></li>
-          <li><b>5.0</b><span id="heroRating">34 Booksy reviews</span></li>
-        </ul>
       </div>
 
-      <div class="hero-side">
-        <div class="pole" aria-hidden="true"><div class="pole-cap"></div><div class="pole-glass"><div class="pole-stripes"></div></div><div class="pole-cap bottom"></div></div>
-        <aside class="ticket" aria-live="polite" aria-label="Next opening">
-          <div class="ticket-top">
-            <span class="ticket-label">Next opening</span>
-            <span class="live"><span class="live-dot"></span>Live</span>
-          </div>
-          <div class="ticket-when" id="nextWhen"><span class="shimmer">Checking the book…</span></div>
-          <div class="ticket-sub" id="nextSub">Miguel Lopez · Haircut</div>
-          <div class="ticket-perf" aria-hidden="true"></div>
-          <button class="btn ink block" type="button" id="nextBtn" data-book>Grab this time<svg class="ic"><use href="#i-arrow"/></svg></button>
-        </aside>
+      <div class="hero-side" aria-hidden="true">
+        <div class="hud-globe" id="hudGlobe"><canvas class="hud-c"></canvas><div class="hglobe"><div class="g-in"></div></div></div>
       </div>
+    </div>
+    <div class="wrap">
+      <ul class="hero-stats" aria-label="Quick facts">
+        <li><b>250+</b><span>Clients</span></li>
+        <li><b id="heroAvg">5.0</b><span>Booksy rating</span></li>
+        <li><b>$0</b><span>Touch-ups</span></li>
+        <li><b>40 min</b><span>Max per cut</span></li>
+      </ul>
     </div>
   </section>
 
@@ -486,5 +487,6 @@
 <script src="assets/js/config.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/site.js"></script>
+<script src="assets/js/hud.js" defer></script>
 </body>
 </html>
