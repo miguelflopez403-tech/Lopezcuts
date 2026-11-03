@@ -27,15 +27,16 @@ from (values (0, time '13:20', time '17:20'), (1, '15:20', '17:20'), (2, '13:00'
              (3, '17:00', '19:40'), (5, '13:00', '15:40')) v(d, t1, t2)
 where not exists (select 1 from public.working_hours);
 
--- Services and prices (same as the current site)
-insert into public.services (name, description, is_addon, duration_min, price, new_client_price, bookable, sort)
+-- Services and prices (same three haircut options as Booksy)
+insert into public.services (name, description, is_addon, duration_min, price, new_client_price, first_visit_only, bookable, sort)
 select * from (values
-  ('Haircut', 'Fade, taper, lineup or scissor cut. Up to 40 minutes. $25 for your first visit, $30 after.', false, 40, 30.00, 25.00::numeric, true, 0),
-  ('Beard', 'Shape-up and lineup on the beard.', true, 0, 5.00, null, true, 10),
-  ('Design', 'Part, line or custom design.', true, 0, 5.00, null, true, 11),
-  ('Touch-up', 'Small fixes after your appointment. Always free. Text to set it up.', false, 15, 0.00, null, false, 20),
-  ('Hometown Haircut', 'Haircut back home in the DMV (DC / Virginia) when Miguel is in town. Text to book.', false, 40, 25.00, null, false, 30)
-) v(name, description, is_addon, duration_min, price, new_client_price, bookable, sort)
+  ('First Time Haircut', 'Your first cut with Miguel. Fade, taper, lineup or scissor cut, up to 40 minutes.', false, 40, 25.00, null::numeric, true, true, 0),
+  ('Returning Client Haircut', 'Welcome back. Fade, taper, lineup or scissor cut, up to 40 minutes.', false, 40, 30.00, null, false, true, 1),
+  ('Hometown Haircut', 'For clients back home in the DMV (DC / Virginia). Book a day Miguel is in town.', false, 40, 25.00, null, false, true, 2),
+  ('Beard', 'Shape-up and lineup on the beard.', true, 0, 5.00, null, false, true, 10),
+  ('Design', 'Part, line or custom design.', true, 0, 5.00, null, false, true, 11),
+  ('Touch-up', 'Small fixes after your appointment. Always free. Text to set it up.', false, 15, 0.00, null, false, false, 20)
+) v(name, description, is_addon, duration_min, price, new_client_price, first_visit_only, bookable, sort)
 where not exists (select 1 from public.services);
 
 -- Budget categories (set your limits in the dashboard)
@@ -52,7 +53,9 @@ from (values
   (3, 'Absolute class service', 'Will', 'Returning Client'),
   (4, 'Dudes nice with it', 'Jonah', 'First Time Client'),
   (5, 'Fire cut w barber', 'Evan', 'First Time Client'),
-  (6, 'Fire cuts', 'Justin', 'Returning Client')
+  (6, 'Fire cuts', 'Justin', 'Returning Client'),
+  (7, '5⭐️', 'Sam', 'Returning Client'),
+  (8, 'good cut', 'Tate', 'Returning Client')
 ) v(i, b, n, l)
 where not exists (select 1 from public.reviews where source = 'booksy');
 

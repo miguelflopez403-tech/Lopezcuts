@@ -151,7 +151,7 @@
   //  DEMO BACKEND (same tables + functions, in this browser)
   // ==================================================================
   function demoBackend() {
-    const KEY = 'lopezcuts-demo-v6';
+    const KEY = 'lopezcuts-demo-v7';
     const ROLE_KEY = 'lopezcuts-demo-role';
     let db = null;
     let memRole = 'owner';
@@ -165,7 +165,7 @@
 
     const STAFF = '00000000-0000-4000-8000-000000000001';
     const STAFF2 = '00000000-0000-4000-8000-000000000002';
-    const SVC = { cut: 'svc-haircut', beard: 'svc-beard', design: 'svc-design', touch: 'svc-touchup' };
+    const SVC = { first: 'svc-first', cut: 'svc-haircut', home: 'svc-hometown', beard: 'svc-beard', design: 'svc-design', touch: 'svc-touchup' };
 
     function seed() {
       let s = 1402; const rnd = () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -186,11 +186,12 @@
         working_hours: [],
         time_off: [],
         services: [
-          { id: SVC.cut, name: 'Haircut', description: 'Fade, taper, lineup or scissor cut. Up to 40 minutes. $25 for your first visit, $30 after.', is_addon: false, duration_min: 40, price: 30, new_client_price: 25, bookable: true, active: true, sort: 0 },
+          { id: SVC.first, name: 'First Time Haircut', description: 'Your first cut with Miguel. Fade, taper, lineup or scissor cut, up to 40 minutes.', is_addon: false, duration_min: 40, price: 25, new_client_price: null, first_visit_only: true, bookable: true, active: true, sort: 0 },
+          { id: SVC.cut, name: 'Returning Client Haircut', description: 'Welcome back. Fade, taper, lineup or scissor cut, up to 40 minutes.', is_addon: false, duration_min: 40, price: 30, new_client_price: null, first_visit_only: false, bookable: true, active: true, sort: 1 },
           { id: SVC.beard, name: 'Beard', description: 'Shape-up and lineup on the beard.', is_addon: true, duration_min: 0, price: 5, new_client_price: null, bookable: true, active: true, sort: 10 },
           { id: SVC.design, name: 'Design', description: 'Part, line or custom design.', is_addon: true, duration_min: 0, price: 5, new_client_price: null, bookable: true, active: true, sort: 11 },
           { id: SVC.touch, name: 'Touch-up', description: 'Small fixes after your appointment. Always free. Text to set it up.', is_addon: false, duration_min: 15, price: 0, new_client_price: null, bookable: false, active: true, sort: 20 },
-          { id: uuid(), name: 'Hometown Haircut', description: 'Haircut back home in the DMV (DC / Virginia) when Miguel is in town. Text to book.', is_addon: false, duration_min: 40, price: 25, new_client_price: null, bookable: false, active: true, sort: 30 },
+          { id: SVC.home, name: 'Hometown Haircut', description: 'For clients back home in the DMV (DC / Virginia). Book a day Miguel is in town.', is_addon: false, duration_min: 40, price: 25, new_client_price: null, first_visit_only: false, bookable: true, active: true, sort: 2 },
         ],
         clients: [], client_notes: [], appointments: [], payments: [], expenses: [],
         budgets: [{ category: 'Supplies', monthly_limit: 80 }, { category: 'Tools & equipment', monthly_limit: 60 }, { category: 'Marketing', monthly_limit: 25 }, { category: 'Software & fees', monthly_limit: 20 }],
@@ -212,7 +213,7 @@
       const off = T.addDays(today, 9);
       d.time_off.push({ id: uuid(), staff_id: STAFF, starts_at: T.zoned(off, '00:00').toISOString(), ends_at: T.zoned(T.addDays(off, 1), '00:00').toISOString(), reason: 'Midterm (sample)' });
 
-      const reviews = [['If you need a haircut this your guy', 'Max', 'Returning Client'], ['Best hair cut i’ve received in a minute', 'Jason', 'First Time Client'], ['Absolute class service', 'Will', 'Returning Client'], ['Dudes nice with it', 'Jonah', 'First Time Client'], ['Fire cut w barber', 'Evan', 'First Time Client'], ['Fire cuts', 'Justin', 'Returning Client']];
+      const reviews = [['If you need a haircut this your guy', 'Max', 'Returning Client'], ['Best hair cut i’ve received in a minute', 'Jason', 'First Time Client'], ['Absolute class service', 'Will', 'Returning Client'], ['Dudes nice with it', 'Jonah', 'First Time Client'], ['Fire cut w barber', 'Evan', 'First Time Client'], ['Fire cuts', 'Justin', 'Returning Client'], ['5⭐️', 'Sam', 'Returning Client'], ['good cut', 'Tate', 'Returning Client']];
       reviews.forEach(([b, n, l], i) => d.reviews.push({ id: uuid(), appointment_id: null, client_id: null, rating: 5, body: b, display_name: n, label: l, source: 'booksy', status: 'published', reply: '', created_at: new Date(now - (i + 1) * 864e5 * 6).toISOString() }));
 
       [['Mid skin fade', 'Fades'], ['Low taper with curls', 'Curly'], ['Crisp lineup', 'Lineups'], ['Burst fade', 'Fades'], ['Beard shape-up', 'Beards'], ['Part design', 'Designs'], ['High taper', 'Tapers'], ['Curly top, drop fade', 'Curly'], ['Freestyle design', 'Designs']]
@@ -229,7 +230,7 @@
       const mk = (client, day, time, status, staff = STAFF) => {
         const start = T.zoned(day, time); const addons = rnd() < 0.25 ? [SVC.beard] : (rnd() < 0.1 ? [SVC.design] : []);
         const isNew = !seen.has(client.id); const price = (isNew ? 25 : 30) + addons.length * 5;
-        const a = { id: uuid(), client_id: client.id, staff_id: staff, service_id: SVC.cut, addon_ids: addons, starts_at: start.toISOString(), ends_at: new Date(+start + 40 * 6e4).toISOString(), status, price, new_client: isNew, source: rnd() < 0.5 ? 'online' : 'booksy', client_message: '', internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: status === 'confirmed' ? now.toISOString() : null, completed_at: status === 'completed' ? new Date(+start + 40 * 6e4).toISOString() : null, cancelled_at: status === 'cancelled' ? start.toISOString() : null, cancelled_by: status === 'cancelled' ? 'client' : null, cancel_reason: '', created_by: null, created_at: new Date(+start - 3 * 864e5).toISOString() };
+        const a = { id: uuid(), client_id: client.id, staff_id: staff, service_id: isNew ? SVC.first : SVC.cut, addon_ids: addons, starts_at: start.toISOString(), ends_at: new Date(+start + 40 * 6e4).toISOString(), status, price, new_client: isNew, source: rnd() < 0.5 ? 'online' : 'booksy', client_message: '', internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: status === 'confirmed' ? now.toISOString() : null, completed_at: status === 'completed' ? new Date(+start + 40 * 6e4).toISOString() : null, cancelled_at: status === 'cancelled' ? start.toISOString() : null, cancelled_by: status === 'cancelled' ? 'client' : null, cancel_reason: '', created_by: null, created_at: new Date(+start - 3 * 864e5).toISOString() };
         if (status === 'completed') { seen.add(client.id); const tip = pick([0, 0, 5, 5, 10, 3, 0, 7]); d.payments.push({ id: uuid(), appointment_id: a.id, client_id: client.id, amount: price, tip, method: pick(methods), note: '', paid_at: a.completed_at, recorded_by: 'demo-owner' }); }
         d.appointments.push(a); return a;
       };
@@ -360,6 +361,7 @@
         const active = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now()).length;
         if (active >= s.max_active_bookings) fail(`You already have ${active} upcoming bookings. Text ${s.phone} if you need another.`);
         const isNew = !db.appointments.some(a => a.client_id === c.id && a.status === 'completed');
+        if (svc.first_visit_only && !isNew) fail('Welcome back! That option is for first visits. Please pick the returning client haircut.');
         const price = (isNew && svc.new_client_price != null ? +svc.new_client_price : +svc.price) + ad.price;
         const a = { id: uuid(), client_id: c.id, staff_id: p_staff_id, service_id: svc.id, addon_ids: ad.ids, starts_at: startIso, ends_at: new Date(+new Date(startIso) + dur * 6e4).toISOString(), status: 'booked', price, new_client: isNew, source: 'online', client_message: String(p_note || '').slice(0, 500), internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: '', created_by: null, created_at: new Date().toISOString() };
         db.appointments.push(a); commit('appointments');

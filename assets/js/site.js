@@ -109,13 +109,21 @@
 
   // ---------------- Prices from the database ----------------
   function renderPrices() {
-    const cut = state.services.find(s => !s.is_addon && s.bookable);
-    if (cut) {
+    const mains = state.services.filter(s => !s.is_addon && s.bookable && s.active);
+    const first = mains.find(s => s.first_visit_only) || mains.find(s => s.new_client_price != null);
+    const back = mains.find(s => !s.first_visit_only && !/hometown/i.test(s.name)) || first;
+    const home = mains.find(s => /hometown/i.test(s.name));
+    if (first || back) {
       const feat = $('.price-card.feature'); const b = $$('.pc-prices .big', feat);
-      if (b[0]) b[0].textContent = money(cut.new_client_price ?? cut.price);
-      if (b[1]) b[1].textContent = money(cut.price);
-      $('.tag', feat).textContent = `Up to ${cut.duration_min} min`;
-      $('.hero-facts li:first-child b').textContent = money(cut.new_client_price ?? cut.price);
+      const firstPrice = first ? (first.first_visit_only ? first.price : (first.new_client_price ?? first.price)) : back.price;
+      if (b[0]) b[0].textContent = money(firstPrice);
+      if (b[1] && back) b[1].textContent = money(back.price);
+      $('.tag', feat).textContent = `Up to ${(back || first).duration_min} min`;
+      $('.hero-facts li:first-child b').textContent = money(firstPrice);
+    }
+    if (home) {
+      const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · ${home.duration_min} min`;
+      const hb = $('#homeBook'); if (hb) { hb.dataset.svc = home.id; hb.textContent = 'Book a hometown cut'; }
     }
     const adds = state.services.filter(s => s.is_addon && s.active);
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
@@ -154,14 +162,18 @@
 
   function openBooking(opts = {}) {
     if (!state.services.length) { toast('Loading services, try again in a second'); return; }
-    B.serviceId = B.serviceId || state.services.find(s => !s.is_addon && s.bookable)?.id;
+    const mains = state.services.filter(s => !s.is_addon && s.bookable && s.active);
+    // People who booked from this phone before start on the returning option; everyone else on first time.
+    const pick = B.form.phone ? mains.find(s => !s.first_visit_only && !/hometown/i.test(s.name)) : mains.find(s => s.first_visit_only);
+    if (opts.serviceId) { B.serviceId = opts.serviceId; B.slot = null; }
+    B.serviceId = B.serviceId || (pick || mains[0])?.id;
     B.staffId = B.staffId || state.staff[0]?.id;
     B.error = ''; B.result = null; B.step = 0;
     if (opts.day && opts.slot) { B.day = opts.day; B.slot = opts.slot; }
     sheet.showModal(); render();
     if (opts.day && opts.slot) go(1);
   }
-  $$('[data-book]').forEach(b => b.addEventListener('click', () => openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : {})));
+  $$('[data-book]').forEach(b => b.addEventListener('click', e => { if (b.id === 'homeBook' && !b.dataset.svc) return; e.preventDefault(); openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : b.dataset.svc ? { serviceId: b.dataset.svc } : {}); }));
   $('#sheetClose').addEventListener('click', () => sheet.close());
   sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });
   sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-')) history.replaceState(null, '', location.pathname + location.search); });

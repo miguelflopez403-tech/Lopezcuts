@@ -357,7 +357,7 @@
       h('div', { class: 'kpis' }, kpis),
       h('div', { class: 'grid2' },
         h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Today\'s chair'), h('div', { class: 'sub' }, greeting)), h('button', { class: 'btn sm', type: 'button', onclick: () => go('calendar') }, icon('cal'), 'Calendar')), tl),
-        h('div', { class: 'section-gap' }, nextUpCard(), confirmationsCard(), headsUpCard())),
+        h('div', { class: 'section-gap' }, nextUpCard(), confirmationsCard(), followupsCard(), headsUpCard())),
     ];
   }
   function apptCard(a, cls) {
@@ -411,6 +411,41 @@
     return h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Confirmation texts'), h('div', { class: 'sub' }, 'Unconfirmed bookings for today and tomorrow. Each text has their one-tap confirm link.'))),
       h('div', { class: 'stack' }, body));
   }
+  // Thank-you texts after a visit: first-timers get rebook + review + refer-a-friend.
+  function followupText(a) {
+    const c = client(a.client_id); const site = siteBase().replace(/\/$/, '');
+    const visits = D.appointments.filter(x => x.client_id === a.client_id && x.status === 'completed').length;
+    const first = a.new_client || visits <= 1;
+    return first
+      ? `Thanks for coming in, ${firstName(c.full_name)}! Hope you love the cut.`
+        + `\nReady for the next one? Book anytime: ${site}`
+        + `\nIf you have a minute, a quick review helps me a lot: ${manageUrl(a.manage_token)}`
+        + `\nKnow someone who needs a cut? Send them ${site} (first cuts are $25).`
+        + `\n- Miguel, Lopezcuts`
+      : `Thanks again, ${firstName(c.full_name)}! Book your next cut anytime: ${site}`
+        + `\nEnjoyed it? A quick review means a lot: ${manageUrl(a.manage_token)}`
+        + `\n- Miguel`;
+  }
+  function followupsCard() {
+    const since = Date.now() - 7 * 864e5;
+    const reviewed = new Set(D.reviews.map(r => r.appointment_id).filter(Boolean));
+    const list = D.appointments.filter(a => a.status === 'completed' && !a.followup_sent_at && !reviewed.has(a.id) && +new Date(a.completed_at || a.starts_at) > since && client(a.client_id)?.phone)
+      .sort((x, y) => (y.new_client - x.new_client) || (+new Date(y.starts_at) - +new Date(x.starts_at))).slice(0, 8);
+    if (!list.length) return null;
+    const body = list.map(a => {
+      const c = client(a.client_id); const msg = followupText(a); const sms = smsHref(c.phone, msg);
+      return h('div', { class: 'reminder' },
+        h('div', { class: 'row between' }, h('b', {}, `${c.full_name} · ${T.date(a.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })}`), a.new_client ? h('span', { class: 'pill gold plain' }, 'First visit') : h('span', { class: 'small muted' }, 'Returning')),
+        h('div', { class: 'msg', title: 'Tap to see the full text', onclick: e => e.currentTarget.classList.toggle('open') }, msg),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn sm', type: 'button', onclick: () => copy(msg) }, icon('copy'), 'Copy'),
+          sms ? h('a', { class: 'btn sm gold', href: sms, onclick: () => markFollowup(a) }, icon('msg'), 'Open in Messages') : null,
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: () => markFollowup(a, true) }, 'Skip')));
+    });
+    return h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Thank-you texts'), h('div', { class: 'sub' }, 'After each visit: ask for a review, invite them back and, for first-timers, a refer-a-friend line.'))),
+      h('div', { class: 'stack' }, body));
+  }
+  async function markFollowup(a, notify) { await run(() => LC.update('appointments', a.id, { followup_sent_at: new Date().toISOString() }), notify ? 'Removed from the list' : null); refresh(['appointments']); }
   async function markSent(a, notify) { await run(() => LC.update('appointments', a.id, { reminder_sent_at: new Date().toISOString() }), notify ? 'Marked as sent' : null); refresh(['appointments']); }
   function headsUpCard() {
     const al = []; const now = Date.now(); const today = T.today();
@@ -1008,15 +1043,15 @@
     const row = sv => {
       const f = { name: h('input', { class: 'inp', value: sv.name, style: 'width:140px', 'aria-label': 'Name' }), price: h('input', { class: 'inp', type: 'number', min: '0', step: '1', value: String(+sv.price), 'aria-label': 'Price' }), new_client_price: h('input', { class: 'inp', type: 'number', min: '0', step: '1', value: sv.new_client_price == null ? '' : String(+sv.new_client_price), placeholder: '—', 'aria-label': 'First visit price' }), duration_min: h('input', { class: 'inp', type: 'number', min: '0', step: '5', value: String(sv.duration_min), 'aria-label': 'Minutes' }), description: h('input', { class: 'inp', value: sv.description, style: 'width:240px', 'aria-label': 'Description' }) };
       const ck = k => h('input', { type: 'checkbox', checked: sv[k], 'aria-label': k, 'data-k': k });
-      const checks = { is_addon: ck('is_addon'), bookable: ck('bookable'), active: ck('active') };
-      return h('tr', {}, h('td', {}, f.name), h('td', {}, f.description), h('td', {}, f.price), h('td', {}, f.new_client_price), h('td', {}, f.duration_min), h('td', {}, checks.is_addon), h('td', {}, checks.bookable), h('td', {}, checks.active),
+      const checks = { first_visit_only: ck('first_visit_only'), is_addon: ck('is_addon'), bookable: ck('bookable'), active: ck('active') };
+      return h('tr', {}, h('td', {}, f.name), h('td', {}, f.description), h('td', {}, f.price), h('td', {}, f.new_client_price), h('td', {}, f.duration_min), h('td', {}, checks.first_visit_only), h('td', {}, checks.is_addon), h('td', {}, checks.bookable), h('td', {}, checks.active),
         h('td', {}, h('div', { class: 'row', style: 'flex-wrap:nowrap' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => {
-          await run(() => LC.update('services', sv.id, { name: f.name.value.trim(), description: f.description.value, price: +f.price.value || 0, new_client_price: f.new_client_price.value === '' ? null : +f.new_client_price.value, duration_min: parseInt(f.duration_min.value, 10) || 0, is_addon: checks.is_addon.checked, bookable: checks.bookable.checked, active: checks.active.checked }), 'Saved'); refresh(['services']);
+          await run(() => LC.update('services', sv.id, { name: f.name.value.trim(), description: f.description.value, price: +f.price.value || 0, new_client_price: f.new_client_price.value === '' ? null : +f.new_client_price.value, duration_min: parseInt(f.duration_min.value, 10) || 0, first_visit_only: checks.first_visit_only.checked, is_addon: checks.is_addon.checked, bookable: checks.bookable.checked, active: checks.active.checked }), 'Saved'); refresh(['services']);
         } }, 'Save'), armBtn('✕', async () => { await run(() => LC.update('services', sv.id, { active: false, bookable: false }), 'Turned off (kept for history)'); refresh(['services']); }, 'btn sm ghost danger', 'Turn off?'))));
     };
     return h('div', { class: 'stack' },
-      h('p', { class: 'hint' }, 'Changes show on the public site right away. "First visit" is the price new clients pay. Add-ons attach to a main service. Turn off "Online" to list a service without letting people book it.'),
-      h('div', { class: 'tbl-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Name', 'Description', 'Price', 'First visit', 'Minutes', 'Add-on', 'Online', 'Active', ''].map(t => h('th', {}, t)))), h('tbody', {}, rows.map(row)))),
+      h('p', { class: 'hint' }, 'Changes show on the public site right away. "New clients only" means only people who have never been in can book it online (like First Time Haircut). "First visit" is an optional lower price for new clients on any service. Add-ons attach to a main service. Turn off "Online" to list a service without letting people book it.'),
+      h('div', { class: 'tbl-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, ['Name', 'Description', 'Price', 'First visit', 'Minutes', 'New clients only', 'Add-on', 'Online', 'Active', ''].map(t => h('th', {}, t)))), h('tbody', {}, rows.map(row)))),
       h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: async () => { await run(() => LC.insert('services', { name: 'New service', description: '', is_addon: false, duration_min: 30, price: 0, new_client_price: null, bookable: false, active: true, sort: rows.length * 10 }), 'Added. Fill it in and save.'); refresh(['services']); } }, icon('plus'), 'Add service'));
   }
   function setHours() {

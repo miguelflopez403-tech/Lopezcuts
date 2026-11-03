@@ -145,11 +145,13 @@ create table if not exists public.services (
   duration_min      int not null default 40 check (duration_min between 0 and 480),
   price             numeric(10,2) not null check (price >= 0),
   new_client_price  numeric(10,2) check (new_client_price >= 0),  -- e.g. $25 first cut
+  first_visit_only  boolean not null default false, -- e.g. "First Time Haircut": only for clients with no past visits
   bookable          boolean not null default true,   -- false = shown on the price list only
   active            boolean not null default true,
   sort              int not null default 0,
   created_at        timestamptz not null default now()
 );
+alter table public.services add column if not exists first_visit_only boolean not null default false;
 
 -- ---------------------------------------------------------------------
 -- Clients
@@ -211,6 +213,7 @@ create table if not exists public.appointments (
     staff_id with =, tstzrange(starts_at, ends_at) with &&
   ) where (status in ('booked', 'confirmed'))
 );
+alter table public.appointments add column if not exists followup_sent_at timestamptz;  -- thank-you / review text sent
 create index if not exists appointments_time_idx on public.appointments (starts_at);
 create index if not exists appointments_client_idx on public.appointments (client_id, starts_at desc);
 create index if not exists appointments_staff_idx on public.appointments (staff_id, starts_at);
@@ -693,6 +696,9 @@ begin
   end if;
 
   v_new := not exists (select 1 from public.appointments where client_id = v_client.id and status = 'completed');
+  if svc.first_visit_only and not v_new then
+    raise exception 'Welcome back! That option is for first visits. Please pick the returning client haircut.';
+  end if;
   v_price := case when v_new and svc.new_client_price is not null then svc.new_client_price else svc.price end + v_add_price;
 
   insert into public.appointments (client_id, staff_id, service_id, addon_ids, starts_at, ends_at,
