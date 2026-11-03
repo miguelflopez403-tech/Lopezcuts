@@ -116,41 +116,79 @@
       $('#gallery').replaceChildren(...boxes.map((b, i) => h('button', { class: 'tile', type: 'button', 'aria-label': `${b.title} (placeholder)`, onclick: () => openLightbox(b, i) }, placeholderArt(i), icon('scissors', 'scissor'), h('span', { class: 'badge' }, 'Placeholder'), h('span', { class: 'cap' }, h('b', {}, b.title)))));
       return;
     }
-    let cur = -1, swapT = 0;
-    const chipEls = real.map((b, i) => h('button', { class: 'car-chip', type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { show(i); hold(); } },
+    // Smooth nonstop glide: the strip drifts left at a steady speed, looping through one category.
+    // After a full loop it fades into the next category. Hover slows it to a stop; fingers can drag it.
+    let cur = -1, swapT = 0, setW = 0, x = 0, v = 0, loops = 0, last = 0, raf = 0, drag = null, moved = 0, nudge = null;
+    let visible = false, hovering = false, resumeAt = 0;
+    const phone = matchMedia('(max-width: 600px)').matches;
+    const SPEED = phone ? 42 : 56; // pixels per second
+    const chipEls = real.map((b, i) => h('button', { class: 'car-chip', type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { show(i); } },
       h('span', {}, b.title), h('small', {}, String(b.photos.length)), h('i', { class: 'car-prog', 'aria-hidden': 'true' })));
     const chips = h('div', { class: 'car-chips', role: 'tablist', 'aria-label': 'Portfolio categories' }, chipEls);
-    const track = h('div', { class: 'car-track', tabindex: '0', 'aria-label': 'Portfolio photos, scroll sideways' });
-    const progress = () => { const c = chipEls[cur]; if (!c) return; const max = track.scrollWidth - track.clientWidth;
-      c.style.setProperty('--p', max > 4 ? Math.min(1, (track.scrollLeft + track.clientWidth) / track.scrollWidth).toFixed(3) : 1); };
-    track.addEventListener('scroll', progress, { passive: true });
+    const row = h('div', { class: 'car-row' });
+    const track = h('div', { class: 'car-track glide', 'aria-label': 'Portfolio photos' }, row);
+    const card = (b, p, k, clone) => h('button', { class: 'car-card', type: 'button', tabindex: clone ? '-1' : '0', 'aria-hidden': clone ? 'true' : null, style: clone ? '' : `--d:${Math.min(k, 5) * 60}ms`, 'aria-label': `${b.title}, photo ${k + 1} of ${b.photos.length}`,
+      onclick: e => { if (moved > 6) { e.preventDefault(); return; } LB = { box: b, i: k }; lbShow(); lb.showModal(); } },
+      h('img', { src: p.image_url, alt: clone ? '' : `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: k < 5 ? 'eager' : 'lazy', decoding: 'async', draggable: 'false' }),
+      h('span', { class: 'car-cap' }, h('b', {}, b.title), h('small', {}, `${k + 1}/${b.photos.length}`)));
+    const place = () => { if (setW) { x = ((x % setW) + setW) % setW; } row.style.transform = `translate3d(${-x}px,0,0)`;
+      const c = chipEls[cur]; if (c && setW) c.style.setProperty('--p', Math.min(1, (loops * setW + x) / setW).toFixed(3)); };
+    function build() {
+      const b = real[cur]; const base = b.photos.map((p, k) => card(b, p, k, false));
+      row.replaceChildren(...base);
+      const gap = 14, cw = base[0].getBoundingClientRect().width || 260;
+      setW = (cw + gap) * base.length;
+      // Add copies until the strip is long enough to loop with no gap.
+      let copies = 0; while ((copies + 1) * setW < track.clientWidth + setW + cw) { copies++; b.photos.forEach((p, k) => row.append(card(b, p, k, true))); }
+      x = 0; loops = 0; place();
+    }
     function show(i) {
-      cur = (i + real.length) % real.length; const b = real[cur];
+      cur = (i + real.length) % real.length;
       chipEls.forEach((c, k) => { c.classList.toggle('on', k === cur); c.setAttribute('aria-selected', String(k === cur)); if (k !== cur) c.style.removeProperty('--p'); });
       const chip = chipEls[cur]; chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: reduced ? 'auto' : 'smooth' });
-      const cards = b.photos.map((p, k) => h('button', { class: 'car-card', type: 'button', style: `--d:${Math.min(k, 5) * 60}ms`, 'aria-label': `${b.title}, photo ${k + 1} of ${b.photos.length}`, onclick: () => { LB = { box: b, i: k }; lbShow(); lb.showModal(); } },
-        h('img', { src: p.image_url, alt: `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: k < 5 ? 'eager' : 'lazy', decoding: 'async' }),
-        h('span', { class: 'car-cap' }, h('b', {}, b.title), h('small', {}, `${k + 1}/${b.photos.length}`))));
       clearTimeout(swapT); track.classList.add('swap');
-      swapT = setTimeout(() => { track.replaceChildren(...cards); track.scrollLeft = 0; track.classList.remove('swap'); progress(); }, track.children.length && !reduced ? 230 : 0);
+      swapT = setTimeout(() => { build(); track.classList.remove('swap'); resumeAt = performance.now() + 700; }, row.children.length && !reduced ? 260 : 0);
     }
-    const step = dir => { const card = track.querySelector('.car-card'); const w = card ? card.getBoundingClientRect().width + 14 : 300;
-      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8, atStart = track.scrollLeft < 8;
-      if (dir > 0 && atEnd) show(cur + 1); else if (dir < 0 && atStart) show(cur - 1); else track.scrollBy({ left: dir * w, behavior: 'smooth' }); };
+    const stepBy = dir => { const c = row.querySelector('.car-card'); const w = c ? c.getBoundingClientRect().width + 14 : 280;
+      if (reduced) { x += dir * w; place(); return; }
+      nudge = { from: x, to: x + dir * w, t0: performance.now() }; resumeAt = performance.now() + 2500; };
+    function frame(now) {
+      raf = 0; const dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
+      if (nudge) { const k = Math.min(1, (now - nudge.t0) / 450), e = 1 - Math.pow(1 - k, 3); x = nudge.from + (nudge.to - nudge.from) * e; if (k >= 1) nudge = null; v = 0; }
+      else if (!drag) {
+        const target = hovering || now < resumeAt || reduced ? 0 : SPEED;
+        v += (target - v) * Math.min(1, dt * 3.5); // ease in and out instead of snapping
+        const before = x; x += v * dt;
+        if (setW && x >= setW) { loops++; }
+        if (setW && before < setW && x >= setW && loops >= 1 && real.length > 1) { place(); show(cur + 1); }
+      }
+      place();
+      if (visible && !document.hidden && !lb.open) raf = requestAnimationFrame(frame); else last = 0;
+    }
+    const kick = () => { if (!raf && visible) { last = 0; raf = requestAnimationFrame(frame); } };
+    // Drag / swipe
+    track.addEventListener('pointerdown', e => { drag = { x0: e.clientX, y0: e.clientY, start: x, id: e.pointerId, lock: null }; moved = 0; nudge = null; });
+    track.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (drag.lock == null && Math.abs(dx) + Math.abs(dy) > 6) drag.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (drag.lock === 'x') { moved = Math.abs(dx); x = drag.start - dx; place(); if (e.pointerType !== 'touch') track.setPointerCapture?.(drag.id); }
+      if (drag.lock === 'y') drag = null; });
+    const endDrag = () => { if (!drag) return; drag = null; v = 0; resumeAt = performance.now() + 1800; kick(); };
+    ['pointerup', 'pointercancel'].forEach(ev => track.addEventListener(ev, endDrag));
+    track.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') hovering = true; });
+    track.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hovering = false; endDrag(); kick(); });
+    track.addEventListener('focusin', () => { hovering = true; });
+    track.addEventListener('focusout', () => { hovering = false; kick(); });
     const wrap = h('div', { class: 'carousel' }, track,
-      h('button', { class: 'icon-btn car-nav prev', type: 'button', 'aria-label': 'Previous photos', onclick: () => { step(-1); hold(); } }, icon('back')),
-      h('button', { class: 'icon-btn car-nav next', type: 'button', 'aria-label': 'Next photos', onclick: () => { step(1); hold(); } }, icon('arrow')));
+      h('button', { class: 'icon-btn car-nav prev', type: 'button', 'aria-label': 'Previous photos', onclick: () => { stepBy(-1); kick(); } }, icon('back')),
+      h('button', { class: 'icon-btn car-nav next', type: 'button', 'aria-label': 'Next photos', onclick: () => { stepBy(1); kick(); } }, icon('arrow')));
     $('#gallery').className = 'gallery-car';
     $('#gallery').replaceChildren(chips, wrap);
     show(0);
-    // Auto-advance; pause while someone is touching or hovering, or the section is off screen.
-    let paused = false, visible = false, holdUntil = 0;
-    const hold = () => { holdUntil = Date.now() + 5000; };
-    ['pointerenter', 'touchstart', 'focusin'].forEach(ev => wrap.addEventListener(ev, () => { paused = true; }, { passive: true }));
-    ['pointerleave', 'touchend', 'focusout'].forEach(ev => wrap.addEventListener(ev, () => { paused = false; hold(); }, { passive: true }));
-    if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(wrap); else visible = true;
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).observe(wrap); else { visible = true; kick(); }
+    document.addEventListener('visibilitychange', kick);
+    lb.addEventListener('close', kick);
+    let rw = innerWidth; addEventListener('resize', () => { if (Math.abs(innerWidth - rw) > 40) { rw = innerWidth; build(); } });
     clearInterval(carTimer);
-    if (!reduced) carTimer = setInterval(() => { if (visible && !paused && Date.now() > holdUntil && !document.hidden && !lb.open) step(1); }, 1700);
   }
   const lb = $('#lightbox'); let LB = { box: null, i: 0 };
   function lbShow() {

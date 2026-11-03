@@ -557,3 +557,10 @@ h2.split.go .w > span { transform: none; }
 .pole-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100; transform-origin: left; transform: scaleX(0); pointer-events: none;
   background: repeating-linear-gradient(-45deg, var(--pole-red) 0 6px, #f4f0e6 6px 9px, var(--pole-blue) 9px 15px, #f4f0e6 15px 18px); background-size: 25.5px 3px; animation: poleX 1.1s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .pole-bar, .car-prog { animation: none; } .car-card { animation: none; } .car-track { transition: none; } }
+
+/* ---------- Portfolio glide ---------- */
+.car-track.glide { display: block; overflow: hidden; scroll-snap-type: none; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; padding: 2px 0 10px; }
+.car-track.glide:active { cursor: grabbing; }
+.car-row { display: flex; gap: 14px; width: max-content; will-change: transform; }
+.car-row .car-card { scroll-snap-align: none; -webkit-touch-callout: none; }
+.car-row .car-card img { pointer-events: none; }
