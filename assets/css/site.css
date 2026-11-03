@@ -132,7 +132,7 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .pole-cap.bottom { border-radius: 6px 6px 14px 14px; }
 .pole-glass { position: relative; width: 44px; flex: 1; overflow: hidden; border-radius: 3px; background: #f4f0e6; box-shadow: inset 6px 0 10px rgb(0 0 0 / 25%), inset -8px 0 12px rgb(0 0 0 / 30%); }
 .pole-glass::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 22%), rgb(255 255 255 / 45%) 30%, transparent 50%, rgb(0 0 0 / 28%)); }
-.pole-stripes { position: absolute; inset: -60px 0 0; background: repeating-linear-gradient(150deg, #d8bd74 0 14px, #0b0b0a 14px 28px, #f1e6ab 28px 42px, #0b0b0a 42px 56px); background-size: 100% 64.7px; animation: pole 2.4s linear infinite; }
+.pole-stripes { position: absolute; inset: -60px 0 0; background: repeating-linear-gradient(150deg, #b8322a 0 14px, #f4f0e6 14px 28px, #24508f 28px 42px, #f4f0e6 42px 56px); background-size: 100% 64.7px; animation: pole 2.4s linear infinite; }
 @keyframes pole { to { background-position: 0 64.7px; } }
 .brand-mark { background-size: 100% 27.7px; }
 
@@ -452,7 +452,6 @@ dialog::backdrop { background: rgb(8 7 6 / 62%); backdrop-filter: blur(4px); }
 .hero-title .gold > span { animation: rise .9s var(--ease) both, sheen 6s ease-in-out 1s infinite; }
 @keyframes sheen { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
 .step-n { background: var(--gold-grad); }
-.pole-glass { background: #0b0b0a; }
 .pole-cap { background: linear-gradient(90deg, #6e5426, #f1e3a3 40%, #a8843c 75%, #4d3b19); }
 @media (max-width: 420px) { .brand-logo { height: 28px; } .brand { font-size: 1.05rem; } }
 @media (prefers-reduced-motion: reduce) { .gold-band, .hero-title .gold > span, .big, .hero-facts b, .stat-n { animation: none; } }
