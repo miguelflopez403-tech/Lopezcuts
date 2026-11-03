@@ -177,6 +177,7 @@
     payments: () => isAdmin() ? LC.list('payments', { gte: { paid_at: since() }, order: 'paid_at', asc: false }) : [],
     expenses: () => isAdmin() ? LC.list('expenses', { gte: { spent_on: since().slice(0, 10) }, order: 'spent_on', asc: false }) : [],
     budgets: () => isAdmin() ? LC.list('budgets', { order: 'category' }) : [],
+    sms_outbox: () => isAdmin() ? LC.list('sms_outbox', { order: 'created_at', asc: false, limit: 60 }).catch(() => []) : [],
     profiles: () => LC.list('profiles', { order: 'email' }),
     staff_invites: () => isOwner() ? LC.list('staff_invites', { order: 'created_at', asc: false }) : [],
     audit_log: () => isOwner() ? LC.list('audit_log', { order: 'at', asc: false, limit: 150 }) : [],
@@ -440,7 +441,7 @@
     const reviewed = new Set(D.reviews.map(r => r.appointment_id).filter(Boolean));
     const list = D.appointments.filter(a => a.status === 'completed' && !a.followup_sent_at && !reviewed.has(a.id) && +new Date(a.completed_at || a.starts_at) > since && client(a.client_id)?.phone)
       .sort((x, y) => (y.new_client - x.new_client) || (+new Date(y.starts_at) - +new Date(x.starts_at))).slice(0, 8);
-    if (!list.length) return null;
+    if (!list.length || S().sms_enabled) return null; // automatic texts handle these
     const body = list.map(a => {
       const c = client(a.client_id); const msg = followupText(a); const sms = smsHref(c.phone, msg);
       return h('div', { class: 'reminder' },
@@ -1088,9 +1089,37 @@
     const tabs = [
       isAdmin() && ['business', 'Business'], isAdmin() && ['services', 'Services & prices'], ['hours', 'Hours & time off'], isOwner() && ['team', 'Team & access'], ['security', 'My account'], isOwner() && ['activity', 'Activity log'],
     ].filter(Boolean);
+    tabs.splice(isAdmin() ? 2 : 0, 0, ...(isAdmin() ? [['texts', 'Texts']] : []));
     if (!tabs.some(t => t[0] === UI.setupTab)) UI.setupTab = tabs[0][0];
-    const body = { business: setBusiness, services: setServices, hours: setHours, team: setTeam, security: setSecurity, activity: setActivity }[UI.setupTab]();
+    const body = { business: setBusiness, texts: setTexts, services: setServices, hours: setHours, team: setTeam, security: setSecurity, activity: setActivity }[UI.setupTab]();
     return [h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(UI.setupTab === k), onclick: () => { UI.setupTab = k; render(); } }, l))), body].flat();
+  }
+  function setTexts() {
+    const s = S();
+    const on = h('input', { type: 'checkbox', id: 'st_sms', checked: !!s.sms_enabled });
+    const hour = h('select', { id: 'st_smsHour' }, Array.from({ length: 16 }, (_, i) => i + 6).map(hr => h('option', { value: String(hr), selected: hr === (s.sms_followup_hour ?? 11) }, T.time(T.zoned(T.today(), T.hm(hr * 60))))));
+    const site = h('input', { id: 'st_site', value: s.site_url || 'https://www.lopezcuts.com' });
+    const save = async () => {
+      const url = site.value.trim().replace(/\/$/, ''); if (!/^https:\/\/[^\s]+$/.test(url)) { toast('Website must start with https://'); return; }
+      await run(() => LC.update('settings', 1, { sms_enabled: on.checked, sms_followup_hour: +hour.value, site_url: url, updated_at: new Date().toISOString() }), on.checked ? 'Automatic texts on' : 'Automatic texts off'); refresh(['settings']);
+    };
+    const log = D.sms_outbox || [];
+    const kinds = { booked: 'Booking confirmed', rescheduled: 'Rescheduled', cancelled: 'Cancelled by you', followup: 'Thank-you' };
+    const stPill = st => h('span', { class: 'pill plain ' + ({ sent: 'completed', failed: 'no_show', queued: 'booked', sending: 'booked' }[st] || '') }, { sent: 'Sent', failed: 'Failed', queued: 'Waiting', sending: 'Sending' }[st] || st);
+    return h('div', { class: 'grid2' },
+      h('section', { class: 'card stack' }, h('h2', {}, 'Automatic texts'),
+        h('label', { class: 'toggle' }, on, 'Send texts automatically'),
+        h('p', { class: 'hint' }, 'When on, clients get a text when they book, when you cancel or move their appointment, and a thank-you the day after their cut (rebook, refer a friend, leave a review). Clients who cancel themselves are not texted.'),
+        field('Send thank-you texts at', hour, 'The day after the visit, your time'),
+        field('Website in texts', site),
+        h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save'),
+        h('div', { class: 'alert info' }, icon('alert'), h('span', {}, 'Texts go out through your Twilio account. Until it is connected (see TEXTS-SETUP.md), nothing reaches clients.'))),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Recent texts'),
+        log.length ? h('div', { class: 'list' }, log.map(m => h('div', { class: 'li' },
+          h('div', { class: 'main' }, h('div', { class: 't' }, `${kinds[m.kind] || m.kind} · ${client(m.client_id).full_name}`),
+            h('div', { class: 's' }, `${T.date(m.created_at)} ${T.time(m.created_at)}${m.error ? ' · ' + m.error : ''}`),
+            h('details', {}, h('summary', { class: 'small muted' }, 'Show text'), h('div', { class: 'small', style: 'white-space:pre-wrap' }, m.body))),
+          stPill(m.status)))) : h('div', { class: 'empty' }, s.sms_enabled ? 'No texts yet.' : 'Automatic texts are off.')));
   }
   function setBusiness() {
     const s = S(); const v = {};
