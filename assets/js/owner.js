@@ -707,7 +707,7 @@
       return h('section', { class: 'sched-day' + (isToday ? ' today' : '') + (d < today ? ' past' : ''), id: 'day-' + d },
         h('div', { class: 'sched-h' },
           h('div', {}, h('div', { class: 'sd-name' }, label), h('div', { class: 'sd-date' }, T.dayLabel(d, { month: 'long', day: 'numeric' }))),
-          h('div', { class: 'sd-tot' }, h('span', {}, live.length ? `${live.length} client${live.length === 1 ? '' : 's'}` : 'No bookings'), isAdmin() && live.length ? h('b', {}, money(est(live))) : null)),
+          h('div', { class: 'sd-tot' }, h('span', {}, live.length ? `${live.length} client${live.length === 1 ? '' : 's'}` : 'No bookings'), isAdmin() ? h('b', {}, money(est(live))) : null, isAdmin() ? h('small', {}, d < today ? 'income' : 'est. income') : null)),
         list.length ? h('div', { class: 'sched-list' }, list.map(a => {
           const c = client(a.client_id); const end = +new Date(a.ends_at); const isNow = +new Date(a.starts_at) <= now && end > now;
           return h('button', { class: 'sched-row' + (end < now ? ' done' : '') + (isNow ? ' now' : ''), type: 'button', onclick: () => openAppt(a) },

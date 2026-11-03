@@ -399,7 +399,8 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
 .sched-day.today .sched-h { background: linear-gradient(90deg, #050505, #2a2210); }
 .sd-name { font: 400 1.45rem/1 var(--display); letter-spacing: .03em; }
 .sched-day.today .sd-name { color: var(--gold); }
-.sd-date { font-size: .78rem; color: var(--side-muted); margin-top: 3px; }
+.sd-date { font-size: 1.02rem; font-weight: 600; color: #e7e0d0; margin-top: 4px; }
+.sd-tot small { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--side-muted); }
 .sd-tot { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: .8rem; color: var(--side-text); }
 .sd-tot b { font: 400 1.5rem/1 var(--display); color: var(--gold); letter-spacing: .02em; }
 .sched-list { display: flex; flex-direction: column; }
