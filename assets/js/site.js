@@ -89,12 +89,15 @@
 
   // ---------------- Reviews ----------------
   function renderReviews() {
-    const list = state.reviews.slice(0, 9);
+    const withText = state.reviews.filter(r => (r.body || '').trim());
+    const list = state.showAllReviews ? withText : withText.slice(0, 6);
+    const more = $('#moreReviews');
+    if (more) { more.hidden = withText.length <= 6; more.textContent = state.showAllReviews ? 'Show fewer' : `See all ${withText.length} reviews`; more.onclick = () => { state.showAllReviews = !state.showAllReviews; renderReviews(); if (!state.showAllReviews) $('#reviews').scrollIntoView({ behavior: 'smooth' }); }; }
     $('#reviewList').replaceChildren(...list.map(r => h('article', { class: 'review', 'data-reveal': '' },
       h('span', { class: 'stars', 'aria-label': `${r.rating} out of 5 stars` }, '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating)),
       h('q', {}, r.body),
       r.reply ? h('p', { class: 'reply' }, 'Miguel: ' + r.reply) : null,
-      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, `${r.label || 'Client'} · via ${r.source === 'booksy' ? 'Booksy' : 'Lopezcuts'}`))))));
+      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, [r.label, r.created_at ? T.date(r.created_at, { month: 'short', year: 'numeric' }) : '', r.source === 'booksy' ? 'via Booksy' : 'via Lopezcuts'].filter(Boolean).join(' · ')))))));
     const s = state.settings; if (!s) return;
     const site = state.reviews.filter(r => r.source === 'site');
     const count = (+s.booksy_review_count || 0) + site.length;
@@ -325,7 +328,9 @@
     body.replaceChildren(h('div', { class: 'skeleton', style: 'height:160px' }));
     let bk;
     try { bk = await LC.rpc('get_booking', { p_token: token }); } catch (e) { body.replaceChildren(h('div', { class: 'err' }, e.message)); return; }
-    if (['booked', 'confirmed'].includes(bk.status) && bk.starts_at) rememberBooking({ token, starts_at: bk.starts_at, ends_at: bk.ends_at }); else forgetBooking(token);
+    if (!bk) { forgetBooking(token); }
+    else if (['booked', 'confirmed', 'completed'].includes(bk.status) && bk.starts_at) rememberBooking({ token, starts_at: bk.starts_at, ends_at: bk.ends_at }, bk.reviewed ? { reviewed: true } : {});
+    else forgetBooking(token);
     if (!bk) { body.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find that booking. Check the link or text (571) 599-9297.')); return; }
     const label = { booked: 'Booked', confirmed: 'Confirmed', completed: 'Completed', no_show: 'Missed', cancelled: 'Cancelled' }[bk.status];
     const view = [
@@ -356,9 +361,13 @@
     body.replaceChildren(h('div', { class: 'step-anim' }, view));
   }
   // This device remembers upcoming bookings so "My booking" in the top bar opens them.
-  const savedBookings = () => { try { return (JSON.parse(localStorage.getItem('lopezcuts-bookings') || '[]') || []).filter(b => b && b.token && new Date(b.ends_at || b.starts_at) > Date.now()); } catch { return []; } };
-  function rememberBooking(r) { try { const list = savedBookings().filter(b => b.token !== r.token); list.push({ token: r.token, starts_at: r.starts_at, ends_at: r.ends_at }); localStorage.setItem('lopezcuts-bookings', JSON.stringify(list.slice(-5))); } catch { } showMyBooking(); }
-  function forgetBooking(token) { try { localStorage.setItem('lopezcuts-bookings', JSON.stringify(savedBookings().filter(b => b.token !== token))); } catch { } showMyBooking(); }
+  // Past visits stay for 60 days so the same device can leave a review.
+  const allBookings = () => { try { return (JSON.parse(localStorage.getItem('lopezcuts-bookings') || '[]') || []).filter(b => b && b.token && new Date(b.ends_at || b.starts_at) > Date.now() - 60 * 864e5); } catch { return []; } };
+  const savedBookings = () => allBookings().filter(b => !b.cancelled && new Date(b.ends_at || b.starts_at) > Date.now());
+  const pastBookings = () => allBookings().filter(b => !b.cancelled && !b.reviewed && new Date(b.ends_at || b.starts_at) <= Date.now()).sort((a, b) => +new Date(b.starts_at) - +new Date(a.starts_at));
+  function saveBookings(list) { try { localStorage.setItem('lopezcuts-bookings', JSON.stringify(list.slice(-8))); } catch { } showMyBooking(); }
+  function rememberBooking(r, extra = {}) { saveBookings([...allBookings().filter(b => b.token !== r.token), { token: r.token, starts_at: r.starts_at, ends_at: r.ends_at, ...extra }]); }
+  function forgetBooking(token) { saveBookings(allBookings().filter(b => b.token !== token)); }
   function showMyBooking() {
     const btn = $('#myBooking'); if (!btn) return; const next = savedBookings().sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))[0];
     btn.hidden = !next; if (next) btn.onclick = () => { location.hash = '#manage-' + next.token; };
@@ -373,6 +382,25 @@
       h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, 'Open booking'),
       h('p', { class: 'muted small' }, 'Lost it? Text (571) 599-9297.')));
   });
+
+  // ---------------- Leave a review ----------------
+  function openReview() {
+    const past = pastBookings();
+    if (past.length === 1) { openManage(past[0].token); return; }
+    B.step = 9; sheet.showModal(); header('Leave a review', 'Reviews', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
+    const inp = h('input', { id: 'reviewLink', placeholder: 'Paste your booking link', autocomplete: 'off' });
+    const recent = past.length ? [h('p', { class: 'opt-label' }, 'Your recent visits'), ...past.slice(0, 3).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('star'), `Review my ${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} cut`))] : [];
+    body.replaceChildren(h('div', { class: 'step-anim' },
+      h('p', { class: 'muted' }, 'Thanks for taking a minute! Reviews open once your cut is done and help other people find me.'),
+      ...recent,
+      h('p', { class: 'opt-label' }, past.length ? 'Or use your booking link' : 'Use your booking link'),
+      h('p', { class: 'muted small' }, 'It\'s in your booking confirmation and in Miguel\'s thank-you text. Tapping it opens the review form.'),
+      h('div', { class: 'field' }, h('label', { for: 'reviewLink' }, 'Booking link'), inp),
+      h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, icon('star'), 'Write my review'),
+      h('p', { class: 'muted small' }, 'Can\'t find it? Text (571) 599-9297 and Miguel will send you a review link.')));
+  }
+  document.addEventListener('click', e => { const t = e.target.closest('[data-review]'); if (t) { e.preventDefault(); openReview(); } });
+  if (location.hash === '#review') setTimeout(openReview, 0);
 
   // ---------------- Load ----------------
   async function load() {

@@ -152,7 +152,7 @@
   //  DEMO BACKEND (same tables + functions, in this browser)
   // ==================================================================
   function demoBackend() {
-    const KEY = 'lopezcuts-demo-v9';
+    const KEY = 'lopezcuts-demo-v10';
     const ROLE_KEY = 'lopezcuts-demo-role';
     let db = null;
     let memRole = 'owner';
@@ -214,8 +214,8 @@
       const off = T.addDays(today, 9);
       d.time_off.push({ id: uuid(), staff_id: STAFF, starts_at: T.zoned(off, '00:00').toISOString(), ends_at: T.zoned(T.addDays(off, 1), '00:00').toISOString(), reason: 'Midterm (sample)' });
 
-      const reviews = [['If you need a haircut this your guy', 'Max', 'Returning Client'], ['Best hair cut i’ve received in a minute', 'Jason', 'First Time Client'], ['Absolute class service', 'Will', 'Returning Client'], ['Dudes nice with it', 'Jonah', 'First Time Client'], ['Fire cut w barber', 'Evan', 'First Time Client'], ['Fire cuts', 'Justin', 'Returning Client'], ['5⭐️', 'Sam', 'Returning Client'], ['good cut', 'Tate', 'Returning Client']];
-      reviews.forEach(([b, n, l], i) => d.reviews.push({ id: uuid(), appointment_id: null, client_id: null, rating: 5, body: b, display_name: n, label: l, source: 'booksy', status: 'published', reply: '', created_at: new Date(now - (i + 1) * 864e5 * 6).toISOString() }));
+      const reviews = [["", "Wiley St. G.", "2026-10-27"], ["", "Morgan N.", "2026-09-28"], ["If you need a haircut this your guy", "Max S.", "2026-09-24"], ["Best hair cut i’ve received in a minute", "Jason B.", "2026-09-08"], ["Absolute class service", "Will K.", "2026-09-06"], ["Dudes nice with it", "Jonah L.", "2026-09-06"], ["Fire cut w barber", "Evan M.", "2026-04-13"], ["5⭐️", "Sam P.", "2026-03-22"], ["good cut", "Tate M.", "2026-03-16"], ["Fire cuts", "Justin D.", "2026-03-15"], ["great cut", "Kaiden", "2026-03-02"], ["Fire", "Stone H.", "2026-03-02"], ["The goat", "Devin V.", "2026-03-02"], ["Awesome cut at a great price", "Mark", "2026-03-02"], ["Great cuts", "Ethan M.", "2026-03-02"], ["Great barber. Definitely will be getting more cuts in the future. He always provides exactly what I ask for.", "Jeremy B.", "2026-03-02"], ["Goat", "Zach J.", "2026-02-22"], ["he does haircuts", "Morgan N.", "2026-02-05"], ["🐐", "Nick S.", "2026-01-14"], ["Good cut", "Jacob L.", "2026-01-11"], ["🔥🔥🔥🔥🔥🔥🔥", "Jake T.", "2026-01-09"], ["wonderful", "Wills F.", "2026-01-04"], ["Great cut", "Michael W.", "2025-12-23"], ["Bangin", "Cole D.", "2025-12-20"], ["Fire", "Gio B.", "2025-12-04"], ["Cuts fire", "Charlie M.", "2025-11-17"], ["Talented asf", "Owen J.", "2025-10-09"], ["Awesome barber. Def recommend. Dude knows what he’s doing", "Peyton I.", "2025-10-03"], ["perfect cut", "Aidan L.", "2025-10-03"], ["Fire", "Maclan G.", "2025-10-02"], ["Great haircut", "Jack", "2025-09-17"], ["Blessed me with a fire haircut and overall just a good dude to talk with", "Ethan", "2025-09-14"], ["fire", "Will P.", "2025-09-13"], ["Best service", "William B.", "2025-08-09"]];
+      reviews.forEach(([b, n, dt]) => d.reviews.push({ id: uuid(), appointment_id: null, client_id: null, rating: 5, body: b, display_name: n, label: '', source: 'booksy', status: 'published', reply: '', created_at: new Date(dt + 'T19:00:00Z').toISOString() }));
 
       [['Mid skin fade', 'Fades'], ['Low taper with curls', 'Curly'], ['Crisp lineup', 'Lineups'], ['Burst fade', 'Fades'], ['Beard shape-up', 'Beards'], ['Part design', 'Designs'], ['High taper', 'Tapers'], ['Curly top, drop fade', 'Curly'], ['Freestyle design', 'Designs'], ['Fresh cut', 'Fades'], ['Clean up', 'Fades']]
         .forEach(([t, c], i) => d.portfolio_items.push({ id: uuid(), title: t, category: c, description: 'Placeholder until real photos are added', image_url: null, published: true, sort: i, created_at: now.toISOString() }));
