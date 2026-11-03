@@ -6,13 +6,16 @@
 -- =====================================================================
 
 -- =====================================================================
---  AUTOMATIC TEXTS (off until Settings → Texts is switched on and a
---  Twilio account is connected to the send-text Edge Function).
+--  CLIENT TEXTS. Manual mode (default): texts wait on the Today page and
+--  you send them from your own phone. Auto mode: a Twilio account sends
+--  them through the send-text Edge Function.
 --  Appointments drop a message into sms_outbox; the Edge Function sends
 --  it through Twilio and records the result. Only owner/manager can read
 --  the log. Visitors and employees can't read or write it.
 -- =====================================================================
-alter table public.settings add column if not exists sms_enabled boolean not null default false;
+-- off = no texts; manual = texts wait on the Today page for you to send from your phone (free);
+-- auto = sent by Twilio.
+alter table public.settings add column if not exists text_mode text not null default 'manual' check (text_mode in ('off', 'manual', 'auto'));
 alter table public.settings add column if not exists sms_followup_hour int not null default 11 check (sms_followup_hour between 6 and 21);
 alter table public.settings add column if not exists site_url text not null default 'https://www.lopezcuts.com';
 
@@ -23,25 +26,31 @@ create table if not exists public.sms_outbox (
   kind            text not null check (kind in ('booked', 'rescheduled', 'cancelled', 'followup')),
   to_phone        text not null,
   body            text not null,
-  status          text not null default 'queued' check (status in ('queued', 'sending', 'sent', 'failed')),
+  status          text not null default 'queued' check (status in ('queued', 'sending', 'sent', 'failed', 'skipped')),
   provider_id     text,
   error           text,
   created_at      timestamptz not null default now(),
   sent_at         timestamptz
 );
+alter table public.sms_outbox drop constraint if exists sms_outbox_status_check;
+alter table public.sms_outbox add constraint sms_outbox_status_check check (status in ('queued', 'sending', 'sent', 'failed', 'skipped'));
 create index if not exists sms_outbox_created_idx on public.sms_outbox (created_at desc);
 alter table public.sms_outbox enable row level security;
 drop policy if exists sms_outbox_admin_read on public.sms_outbox;
 create policy sms_outbox_admin_read on public.sms_outbox for select to authenticated using (public.is_admin());
 revoke all on public.sms_outbox from anon;
 revoke insert, update, delete on public.sms_outbox from authenticated;
+-- Owner/manager can mark a text as sent or skipped from the dashboard (nothing else).
+grant update (status, sent_at, error) on public.sms_outbox to authenticated;
+drop policy if exists sms_outbox_admin_mark on public.sms_outbox;
+create policy sms_outbox_admin_mark on public.sms_outbox for update to authenticated using (public.is_admin()) with check (public.is_admin() and status in ('sent', 'skipped'));
 
 -- Builds the words of each text. Edit the wording here.
 create or replace function public.sms_body(p_kind text, p_appt uuid)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare
   s public.settings%rowtype; a public.appointments%rowtype; c public.clients%rowtype;
-  v_first text; v_when text; v_svc text; v_link text; v_site text; v_visits int;
+  v_first text; v_when text; v_stop text; v_svc text; v_link text; v_site text; v_visits int;
 begin
   select * into s from public.settings where id = 1;
   select * into a from public.appointments where id = p_appt;
@@ -51,9 +60,10 @@ begin
   v_svc := coalesce((select name from public.services where id = a.service_id), 'haircut');
   v_site := rtrim(s.site_url, '/');
   v_link := v_site || '/#manage-' || a.manage_token;
+  v_stop := case when s.text_mode = 'auto' then E'\nReply STOP to opt out.' else '' end;
   if p_kind = 'booked' then
-    return format(E'Hi %s! Your booking with %s went through: %s (%s).\nMiguel will text you the day of your appointment.\nNeed to change it? %s\nReply STOP to opt out.',
-                  v_first, s.business_name, v_when, v_svc, v_link);
+    return format(E'Hi %s! Your booking with %s went through: %s (%s).\nMiguel will text you the day of your appointment.\nNeed to change it? %s%s',
+                  v_first, s.business_name, v_when, v_svc, v_link, v_stop);
   elsif p_kind = 'rescheduled' then
     return format(E'Hi %s, Miguel moved your %s appointment to %s.\nIf that time doesn''t work, change it here: %s or text %s.',
                   v_first, s.business_name, v_when, v_link, s.phone);
@@ -77,7 +87,7 @@ create or replace function public.queue_sms(p_kind text, p_appt uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_phone text; v_client uuid;
 begin
-  if not coalesce((select sms_enabled from public.settings where id = 1), false) then return; end if;
+  if coalesce((select text_mode from public.settings where id = 1), 'off') = 'off' then return; end if;
   select c.phone, c.id into v_phone, v_client from public.appointments a join public.clients c on c.id = a.client_id where a.id = p_appt;
   if v_phone is null or length(v_phone) < 11 then return; end if;
   insert into public.sms_outbox (appointment_id, client_id, kind, to_phone, body)
@@ -111,7 +121,7 @@ returns int language plpgsql security definer set search_path = public as $$
 declare s public.settings%rowtype; r record; n int := 0; v_today date;
 begin
   select * into s from public.settings where id = 1;
-  if not s.sms_enabled then return 0; end if;
+  if s.text_mode <> 'auto' then return 0; end if;  -- manual mode: thank-yous show on the Today page
   if extract(hour from now() at time zone s.timezone) <> s.sms_followup_hour then return 0; end if;
   v_today := (now() at time zone s.timezone)::date;
   for r in

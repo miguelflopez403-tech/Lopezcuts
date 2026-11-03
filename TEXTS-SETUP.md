@@ -1,4 +1,10 @@
-# Turning on automatic texts
+# Client texts
+
+**Free mode (default): you don't need any of this.** In Settings → Texts, "I send them from my phone" lines the texts up
+on your Today page under **Texts to send**. Tap Open in Messages on each one at the end of the day.
+Run step 1 below once so the booking, move and cancel texts get queued.
+
+The rest of this guide is only for **automatic** mode (Twilio, about $3–6/month).
 
 Lopezcuts sends four texts on its own once this is set up:
 
@@ -9,7 +15,7 @@ Lopezcuts sends four texts on its own once this is set up:
 | You cancel their appointment | Sorry note (with your reason, if you typed one) + link to book again |
 | Day after their cut | Thank you, rebook, review link, refer a friend (first cuts $25) |
 
-Clients who cancel themselves are not texted. Nothing is sent until you switch it on in step 5.
+Clients who cancel themselves are not texted. Nothing is sent by Twilio until you choose Send automatically in step 5.
 The wording lives in `supabase/schema.sql` → `sms_body`; ask Claude to change it.
 
 **Keep your Twilio keys to yourself.** You paste them straight into Supabase.
@@ -19,10 +25,10 @@ Don't send them in chat or put them in the code.
 
 ## 1. Database (2 minutes)
 
-1. Supabase → **Integrations** → **Cron** → **Enable**.
+1. (Automatic mode only) Supabase → **Integrations** → **Cron** → **Enable**.
 2. Supabase → **SQL Editor** → New query → paste
    [`supabase/updates/2026-11-03-auto-texts.sql`](supabase/updates/2026-11-03-auto-texts.sql) → **Run**.
-   The last line should say `texts_ready = true`. If you see "Cron is not on yet", do step 1 and run it again.
+   The last line should say `texts_ready = true`. In free mode you can ignore the "Cron is not on yet" note. For automatic mode, do step 1 and run it again.
 
 ## 2. Twilio account (15 minutes, then a few days for approval)
 
@@ -61,11 +67,11 @@ Supabase → **Database** → **Webhooks** → **Create a new hook**:
 
 ## 5. Test it
 
-In the dashboard, open **Settings → Texts**, turn on **Send texts automatically** and save.
+In the dashboard, open **Settings → Texts**, choose **Send automatically** and save.
 Then book yourself on lopezcuts.com with your own cell number.
 Within a few seconds the text appears under **Recent texts** as **Sent**, and it arrives on your phone.
 If it says **Failed**, the reason is shown next to it. Send Claude a screenshot.
 
 ## 6. Done
 
-Leave the switch on. To pause all texts, turn it off. Messages that are already sent stay in the log.
+To go back to sending from your phone, choose "I send them from my phone". To stop all texts, choose Off.

@@ -152,7 +152,7 @@
   //  DEMO BACKEND (same tables + functions, in this browser)
   // ==================================================================
   function demoBackend() {
-    const KEY = 'lopezcuts-demo-v8';
+    const KEY = 'lopezcuts-demo-v9';
     const ROLE_KEY = 'lopezcuts-demo-role';
     let db = null;
     let memRole = 'owner';
@@ -295,6 +295,20 @@
     let bulk = false;
     const commit = (t) => { if (bulk) return; store.save(); emit(t); };
     const clone = x => JSON.parse(JSON.stringify(x));
+    // Demo copy of the database's text queue (supabase/schema.sql → queue_sms).
+    function queueText(kind, a) {
+      const st = db.settings[0]; if ((st.text_mode || 'manual') === 'off') return;
+      const c = db.clients.find(x => x.id === a.client_id); if (!c || !c.phone) return;
+      const tz = st.timezone || 'America/Denver'; const site = (st.site_url || 'https://www.lopezcuts.com').replace(/\/$/, '');
+      const when = new Date(a.starts_at).toLocaleString('en-US', { timeZone: tz, weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(/, (\d+:\d+)/, ' at $1');
+      const first = c.full_name.trim().split(' ')[0]; const svc = db.services.find(x => x.id === a.service_id)?.name || 'haircut'; const link = site + '/#manage-' + a.manage_token;
+      const body = {
+        booked: `Hi ${first}! Your booking with ${st.business_name} went through: ${when} (${svc}).\nMiguel will text you the day of your appointment.\nNeed to change it? ${link}`,
+        rescheduled: `Hi ${first}, Miguel moved your ${st.business_name} appointment to ${when}.\nIf that time doesn't work, change it here: ${link} or text ${st.phone}.`,
+        cancelled: `Hi ${first}, sorry! Miguel had to cancel your ${st.business_name} appointment on ${when}.${a.cancel_reason ? '\nNote: ' + a.cancel_reason : ''}\nBook a new time here: ${site}`,
+      }[kind];
+      (db.sms_outbox = db.sms_outbox || []).push({ id: uuid(), appointment_id: a.id, client_id: c.id, kind, to_phone: '+' + c.phone, body, status: 'queued', created_at: new Date().toISOString(), sent_at: null, error: null });
+    }
     const overlaps = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
     const S = () => db.settings[0];
 
@@ -366,7 +380,7 @@
         if (svc.first_visit_only && !isNew) fail('Welcome back! That option is for first visits. Please pick the returning client haircut.');
         const price = (isNew && svc.new_client_price != null ? +svc.new_client_price : +svc.price) + ad.price;
         const a = { id: uuid(), client_id: c.id, staff_id: p_staff_id, service_id: svc.id, addon_ids: ad.ids, starts_at: startIso, ends_at: new Date(+new Date(startIso) + dur * 6e4).toISOString(), status: 'booked', price, new_client: isNew, source: 'online', client_message: String(p_note || '').slice(0, 500), internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: '', created_by: null, created_at: new Date().toISOString() };
-        db.appointments.push(a); commit('appointments');
+        db.appointments.push(a); queueText('booked', a); commit('appointments');
         return { token: a.manage_token, starts_at: a.starts_at, ends_at: a.ends_at, price, new_client: isNew, service: svc.name, addons: ad.names, staff: (db.staff.find(x => x.id === p_staff_id) || {}).display_name, status: 'booked' };
       },
       get_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); return a ? bookingView(a) : null; },
@@ -397,7 +411,7 @@
         if (db.appointments.some(a => a.staff_id === p_staff_id && ['booked', 'confirmed'].includes(a.status) && overlaps(+new Date(a.starts_at), +new Date(a.ends_at), +new Date(startIso), +new Date(endIso)))) fail('That overlaps another booking.');
         const isNew = !db.appointments.some(a => a.client_id === cid && a.status === 'completed');
         const a = { id: uuid(), client_id: cid, staff_id: p_staff_id, service_id: svc.id, addon_ids: ad.ids, starts_at: startIso, ends_at: endIso, status: 'booked', price: p_price != null && p_price !== '' ? +p_price : (isNew && svc.new_client_price != null ? +svc.new_client_price : +svc.price) + ad.price, new_client: isNew, source: src, client_message: '', internal_note: p_note || '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: '', created_by: me().id, created_at: new Date().toISOString() };
-        db.appointments.push(a); commit('appointments'); return a.id;
+        db.appointments.push(a); queueText('booked', a); commit('appointments'); return a.id;
       },
       complete_appointment({ p_id, p_amount, p_tip, p_method, p_note }) {
         const a = db.appointments.find(x => x.id === p_id); if (!a) fail('Appointment not found.');
@@ -448,7 +462,14 @@
           const next = { ...r, ...patch };
           if (['booked', 'confirmed'].includes(next.status) && db.appointments.some(a => a.id !== r.id && a.staff_id === next.staff_id && ['booked', 'confirmed'].includes(a.status) && overlaps(+new Date(a.starts_at), +new Date(a.ends_at), +new Date(next.starts_at), +new Date(next.ends_at)))) throw new ApiError('That overlaps another booking.');
         }
-        Object.assign(r, patch); audit(table, 'update', r); commit(table); return clone(r);
+        const before = { ...r };
+        Object.assign(r, patch); audit(table, 'update', r);
+        if (table === 'appointments' && +new Date(r.starts_at) > Date.now()) {
+          const live = x => ['booked', 'confirmed'].includes(x);
+          if (r.status === 'cancelled' && live(before.status) && (r.cancelled_by || 'shop') === 'shop') queueText('cancelled', r);
+          else if (live(r.status) && live(before.status) && r.starts_at !== before.starts_at) queueText('rescheduled', r);
+        }
+        commit(table); return clone(r);
       },
       async upsert(table, row) { const k = keyOf(table); const ex = (db[table] || []).find(x => x[k] === row[k]); return ex ? this.update(table, row[k], row, k) : this.insert(table, row); },
       async remove(table, id, key) {

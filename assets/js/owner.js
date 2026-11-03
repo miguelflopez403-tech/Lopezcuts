@@ -185,6 +185,7 @@
   async function load(tables = Object.keys(LOADERS)) {
     D = D || {};
     if (!tables.includes('client_stats') && tables.some(t => ['clients', 'appointments', 'payments'].includes(t))) tables = [...tables, 'client_stats'];
+    if (!tables.includes('sms_outbox') && tables.includes('appointments')) tables = [...tables, 'sms_outbox'];
     const res = await Promise.all(tables.map(t => Promise.resolve().then(LOADERS[t]).catch(e => { console.warn(t, e); return D[t] || []; })));
     tables.forEach((t, i) => { D[t] = res[i]; });
     if (S().timezone) T.tz = S().timezone;
@@ -367,7 +368,7 @@
       h('div', { class: 'kpis' }, kpis),
       h('div', { class: 'grid2' },
         h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Today\'s chair'), h('div', { class: 'sub' }, greeting)), h('button', { class: 'btn sm', type: 'button', onclick: () => go('calendar') }, icon('cal'), 'Calendar')), tl),
-        h('div', { class: 'section-gap' }, nextUpCard(), confirmationsCard(), followupsCard(), headsUpCard())),
+        h('div', { class: 'section-gap' }, nextUpCard(), confirmationsCard(), textsCard(), headsUpCard())),
     ];
   }
   function apptCard(a, cls) {
@@ -423,7 +424,7 @@
   }
   // Thank-you texts after a visit: first-timers get rebook + review + refer-a-friend.
   function followupText(a) {
-    const c = client(a.client_id); const site = siteBase().replace(/\/$/, '');
+    const c = client(a.client_id); const site = (S().site_url || siteBase()).replace(/\/$/, '');
     const visits = D.appointments.filter(x => x.client_id === a.client_id && x.status === 'completed').length;
     const first = a.new_client || visits <= 1;
     return first
@@ -436,25 +437,36 @@
         + `\nEnjoyed it? A quick review means a lot: ${manageUrl(a.manage_token)}`
         + `\n- Miguel`;
   }
-  function followupsCard() {
+  // Texts waiting for Miguel to send from his own phone (Settings → Texts → "I send them").
+  // Booking / you-moved-it / you-cancelled-it texts come from the database queue;
+  // thank-yous come from finished visits that haven't had one yet.
+  const textMode = () => S().text_mode || 'manual';
+  function textsCard() {
+    if (textMode() !== 'manual' || !isAdmin()) return null;
+    const kinds = { booked: ['Booking confirmed', 'confirmed'], rescheduled: ['You moved it', 'warn'], cancelled: ['You cancelled', 'no_show'], followup: ['Thank-you', 'gold'] };
+    const queued = (D.sms_outbox || []).filter(m => m.status === 'queued').map(m => ({ key: 'q' + m.id, kind: m.kind, c: client(m.client_id), when: m.created_at, msg: m.body, phone: m.to_phone, done: skip => markText(m, skip) }));
     const since = Date.now() - 7 * 864e5;
     const reviewed = new Set(D.reviews.map(r => r.appointment_id).filter(Boolean));
-    const list = D.appointments.filter(a => a.status === 'completed' && !a.followup_sent_at && !reviewed.has(a.id) && +new Date(a.completed_at || a.starts_at) > since && client(a.client_id)?.phone)
-      .sort((x, y) => (y.new_client - x.new_client) || (+new Date(y.starts_at) - +new Date(x.starts_at))).slice(0, 8);
-    if (!list.length || S().sms_enabled) return null; // automatic texts handle these
-    const body = list.map(a => {
-      const c = client(a.client_id); const msg = followupText(a); const sms = smsHref(c.phone, msg);
+    const thanks = D.appointments.filter(a => a.status === 'completed' && !a.followup_sent_at && !reviewed.has(a.id) && +new Date(a.completed_at || a.starts_at) > since && client(a.client_id)?.phone)
+      .map(a => ({ key: 'f' + a.id, kind: 'followup', c: client(a.client_id), when: a.starts_at, msg: followupText(a), phone: client(a.client_id).phone, first: a.new_client, done: skip => markFollowup(a, skip) }));
+    const list = [...queued.sort((x, y) => +new Date(x.when) - +new Date(y.when)), ...thanks.sort((x, y) => +new Date(y.when) - +new Date(x.when))].slice(0, 25);
+    if (!list.length) return null;
+    const body = list.map(t => {
+      const sms = smsHref(t.phone, t.msg); const [label, tone] = kinds[t.kind] || [t.kind, ''];
       return h('div', { class: 'reminder' },
-        h('div', { class: 'row between' }, h('b', {}, `${c.full_name} · ${T.date(a.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })}`), a.new_client ? h('span', { class: 'pill gold plain' }, 'First visit') : h('span', { class: 'small muted' }, 'Returning')),
-        h('div', { class: 'msg', title: 'Tap to see the full text', onclick: e => e.currentTarget.classList.toggle('open') }, msg),
+        h('div', { class: 'row between' }, h('b', {}, `${t.c.full_name} · ${T.date(t.when, { weekday: 'short', month: 'short', day: 'numeric' })}`),
+          h('span', { class: 'pill plain ' + tone }, t.kind === 'followup' && t.first ? 'Thank-you · first visit' : label)),
+        h('div', { class: 'msg', title: 'Tap to see the full text', onclick: e => e.currentTarget.classList.toggle('open') }, t.msg),
         h('div', { class: 'row' },
-          h('button', { class: 'btn sm', type: 'button', onclick: () => copy(msg) }, icon('copy'), 'Copy'),
-          sms ? h('a', { class: 'btn sm gold', href: sms, onclick: () => markFollowup(a) }, icon('msg'), 'Open in Messages') : null,
-          h('button', { class: 'btn sm ghost', type: 'button', onclick: () => markFollowup(a, true) }, 'Skip')));
+          h('button', { class: 'btn sm', type: 'button', onclick: () => copy(t.msg) }, icon('copy'), 'Copy'),
+          sms ? h('a', { class: 'btn sm gold', href: sms, onclick: () => t.done(false) }, icon('msg'), 'Open in Messages') : null,
+          h('button', { class: 'btn sm ghost', type: 'button', onclick: () => t.done(true) }, 'Skip')));
     });
-    return h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Thank-you texts'), h('div', { class: 'sub' }, 'After each visit: ask for a review, invite them back and, for first-timers, a refer-a-friend line.'))),
+    return h('section', { class: 'card', id: 'textsCard' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, `Texts to send (${list.length})`),
+      h('div', { class: 'sub' }, 'Send these from your phone at the end of the day. Tap Open in Messages, hit send, and it drops off this list.'))),
       h('div', { class: 'stack' }, body));
   }
+  async function markText(m, skip) { await run(() => LC.update('sms_outbox', m.id, { status: skip ? 'skipped' : 'sent', sent_at: skip ? null : new Date().toISOString() }), skip ? 'Removed from the list' : null); refresh(['sms_outbox']); }
   async function markFollowup(a, notify) { await run(() => LC.update('appointments', a.id, { followup_sent_at: new Date().toISOString() }), notify ? 'Removed from the list' : null); refresh(['appointments']); }
   async function markSent(a, notify) { await run(() => LC.update('appointments', a.id, { reminder_sent_at: new Date().toISOString() }), notify ? 'Marked as sent' : null); refresh(['appointments']); }
   function headsUpCard() {
@@ -1095,31 +1107,33 @@
     return [h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(UI.setupTab === k), onclick: () => { UI.setupTab = k; render(); } }, l))), body].flat();
   }
   function setTexts() {
-    const s = S();
-    const on = h('input', { type: 'checkbox', id: 'st_sms', checked: !!s.sms_enabled });
+    const s = S(); let mode = s.text_mode || 'manual';
+    const opt = (val, title, sub) => h('label', { class: 'toggle', style: 'align-items:flex-start' }, h('input', { type: 'radio', name: 'tmode', value: val, checked: mode === val, onchange: () => { mode = val; } }),
+      h('span', {}, h('b', {}, title), h('br'), h('span', { class: 'small muted' }, sub)));
     const hour = h('select', { id: 'st_smsHour' }, Array.from({ length: 16 }, (_, i) => i + 6).map(hr => h('option', { value: String(hr), selected: hr === (s.sms_followup_hour ?? 11) }, T.time(T.zoned(T.today(), T.hm(hr * 60))))));
     const site = h('input', { id: 'st_site', value: s.site_url || 'https://www.lopezcuts.com' });
     const save = async () => {
       const url = site.value.trim().replace(/\/$/, ''); if (!/^https:\/\/[^\s]+$/.test(url)) { toast('Website must start with https://'); return; }
-      await run(() => LC.update('settings', 1, { sms_enabled: on.checked, sms_followup_hour: +hour.value, site_url: url, updated_at: new Date().toISOString() }), on.checked ? 'Automatic texts on' : 'Automatic texts off'); refresh(['settings']);
+      await run(() => LC.update('settings', 1, { text_mode: mode, sms_followup_hour: +hour.value, site_url: url, updated_at: new Date().toISOString() }), 'Saved'); refresh(['settings']);
     };
-    const log = D.sms_outbox || [];
-    const kinds = { booked: 'Booking confirmed', rescheduled: 'Rescheduled', cancelled: 'Cancelled by you', followup: 'Thank-you' };
-    const stPill = st => h('span', { class: 'pill plain ' + ({ sent: 'completed', failed: 'no_show', queued: 'booked', sending: 'booked' }[st] || '') }, { sent: 'Sent', failed: 'Failed', queued: 'Waiting', sending: 'Sending' }[st] || st);
+    const log = (D.sms_outbox || []).filter(m => m.status !== 'queued');
+    const kinds = { booked: 'Booking confirmed', rescheduled: 'You moved it', cancelled: 'You cancelled', followup: 'Thank-you' };
+    const stPill = st => h('span', { class: 'pill plain ' + ({ sent: 'completed', failed: 'no_show', sending: 'booked' }[st] || '') }, { sent: 'Sent', failed: 'Failed', sending: 'Sending', skipped: 'Skipped' }[st] || st);
     return h('div', { class: 'grid2' },
-      h('section', { class: 'card stack' }, h('h2', {}, 'Automatic texts'),
-        h('label', { class: 'toggle' }, on, 'Send texts automatically'),
-        h('p', { class: 'hint' }, 'When on, clients get a text when they book, when you cancel or move their appointment, and a thank-you the day after their cut (rebook, refer a friend, leave a review). Clients who cancel themselves are not texted.'),
-        field('Send thank-you texts at', hour, 'The day after the visit, your time'),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Client texts'),
+        h('p', { class: 'hint' }, 'Clients get a text when they book, when you cancel or move their appointment, and a thank-you after their cut (rebook, refer a friend, leave a review). Clients who cancel themselves are not texted.'),
+        opt('manual', 'I send them from my phone (free)', 'Texts line up on your Today page. Send them at the end of the day with one tap each.'),
+        opt('auto', 'Send automatically (Twilio, about $3–6/month)', 'Needs a Twilio account. See TEXTS-SETUP.md. Thank-yous go out the day after at the time below.'),
+        opt('off', 'Off', 'No client texts.'),
+        field('Automatic thank-you time', hour, 'Only used in automatic mode'),
         field('Website in texts', site),
-        h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save'),
-        h('div', { class: 'alert info' }, icon('alert'), h('span', {}, 'Texts go out through your Twilio account. Until it is connected (see TEXTS-SETUP.md), nothing reaches clients.'))),
+        h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save')),
       h('section', { class: 'card stack' }, h('h2', {}, 'Recent texts'),
         log.length ? h('div', { class: 'list' }, log.map(m => h('div', { class: 'li' },
           h('div', { class: 'main' }, h('div', { class: 't' }, `${kinds[m.kind] || m.kind} · ${client(m.client_id).full_name}`),
             h('div', { class: 's' }, `${T.date(m.created_at)} ${T.time(m.created_at)}${m.error ? ' · ' + m.error : ''}`),
             h('details', {}, h('summary', { class: 'small muted' }, 'Show text'), h('div', { class: 'small', style: 'white-space:pre-wrap' }, m.body))),
-          stPill(m.status)))) : h('div', { class: 'empty' }, s.sms_enabled ? 'No texts yet.' : 'Automatic texts are off.')));
+          stPill(m.status)))) : h('div', { class: 'empty' }, 'No texts yet.')));
   }
   function setBusiness() {
     const s = S(); const v = {};

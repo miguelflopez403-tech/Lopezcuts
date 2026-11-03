@@ -14,6 +14,11 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const sb = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
 
+  // Only send when the dashboard is set to Automatic. In manual mode the texts
+  // stay on the Today page for Miguel to send from his phone.
+  const { data: st } = await sb.from('settings').select('text_mode').eq('id', 1).maybeSingle();
+  if (st?.text_mode !== 'auto') return Response.json({ results: {}, note: 'Texts are not set to Automatic.' });
+
   const payload = await req.json().catch(() => ({}));
   let ids: string[] = payload?.record?.id ? [payload.record.id] : [];
   if (!ids.length) {
