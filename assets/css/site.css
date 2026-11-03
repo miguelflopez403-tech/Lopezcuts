@@ -455,3 +455,22 @@ dialog::backdrop { background: rgb(8 7 6 / 62%); backdrop-filter: blur(4px); }
 .pole-cap { background: linear-gradient(90deg, #6e5426, #f1e3a3 40%, #a8843c 75%, #4d3b19); }
 @media (max-width: 420px) { .brand-logo { height: 28px; } .brand { font-size: 1.05rem; } }
 @media (prefers-reduced-motion: reduce) { .gold-band, .hero-title .gold > span, .big, .hero-facts b, .stat-n { animation: none; } }
+
+/* Portfolio boxes: photo count + lightbox arrows */
+.tile .badge.count { left: auto; right: 12px; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; background: rgb(10 9 8 / 55%); color: #f3ecdc; border-color: rgb(255 255 255 / 18%); backdrop-filter: blur(6px); }
+.lb-nav.prev { left: 10px; } .lb-nav.next { right: 10px; }
+.lb-nav:hover { background: rgb(10 9 8 / 80%); }
+
+/* Bigger pole + next-opening ticket on wider screens (fills the hero) */
+@media (min-width: 901px) {
+  .hero-side { gap: 36px; }
+  .pole { width: 74px; height: 440px; } .pole-cap { width: 74px; height: 32px; } .pole-glass { width: 56px; }
+  .ticket { width: min(430px, 100%); padding: 30px 30px 26px; border-radius: 22px; }
+  .ticket-label { font-size: .8rem; }
+  .ticket-when { font-size: 3.4rem; min-height: 3.4rem; margin: 18px 0 8px; }
+  .ticket-when small { font-size: 1.1rem; }
+  .ticket-sub { font-size: 1.02rem; }
+  .ticket-perf { margin: 24px -30px; }
+  .ticket .btn { padding-top: 17px; padding-bottom: 17px; font-size: 1.08rem; }
+}

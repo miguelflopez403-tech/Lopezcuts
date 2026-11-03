@@ -68,22 +68,53 @@
     const hue = (i * 23) % 40 - 20;
     return h('div', { class: 'ph', style: `background:${g[cat] || g.Fades};filter:hue-rotate(${hue}deg)` });
   }
+  // Photos are grouped into boxes by their category. The first photo (lowest sort) is the cover;
+  // tapping a box opens all of its photos. Tiles without a photo only show while there are no real photos.
+  function galleryBoxes() {
+    const withImg = state.portfolio.filter(p => p.image_url);
+    if (!withImg.length) return state.portfolio.map(p => ({ title: p.title, desc: p.description, photos: [], ph: p }));
+    const map = new Map();
+    withImg.slice().sort((x, y) => (x.sort || 0) - (y.sort || 0)).forEach(p => {
+      const key = (p.category || p.title || 'Cuts').trim();
+      if (!map.has(key)) map.set(key, { title: key, photos: [] });
+      map.get(key).photos.push(p);
+    });
+    return [...map.values()];
+  }
   function renderGallery() {
-    const items = state.portfolio;
-    $('#placeholderNote').hidden = !items.some(p => !p.image_url);
-    const tiles = items.map((p, i) => {
-      return h('button', { class: 'tile', type: 'button', 'aria-label': `${p.title}${p.image_url ? '' : ' (placeholder)'}`, onclick: () => openLightbox(p, i) },
-        p.image_url ? h('img', { src: p.image_url, alt: p.title, loading: 'lazy' }) : [placeholderArt(i), icon('scissors', 'scissor')],
-        !p.image_url && h('span', { class: 'badge' }, 'Placeholder'),
-        h('span', { class: 'cap' }, h('b', {}, p.title), p.description && !/^placeholder/i.test(p.description) ? h('span', {}, p.description) : null));
+    const boxes = galleryBoxes();
+    $('#placeholderNote').hidden = !boxes.some(b => !b.photos.length);
+    const tiles = boxes.map((b, i) => {
+      const cover = b.photos[0];
+      return h('button', { class: 'tile', type: 'button', 'aria-label': cover ? `${b.title}, ${b.photos.length} photo${b.photos.length > 1 ? 's' : ''}` : `${b.title} (placeholder)`, onclick: () => openLightbox(b, i) },
+        cover ? h('img', { src: cover.image_url, alt: b.title, loading: 'lazy' }) : [placeholderArt(i), icon('scissors', 'scissor')],
+        !cover && h('span', { class: 'badge' }, 'Placeholder'),
+        cover && b.photos.length > 1 && h('span', { class: 'badge count' }, `${b.photos.length} photos`),
+        h('span', { class: 'cap' }, h('b', {}, b.title), b.desc && !/^placeholder/i.test(b.desc) ? h('span', {}, b.desc) : null));
     });
     $('#gallery').replaceChildren(...tiles);
   }
-  const lb = $('#lightbox');
-  function openLightbox(p, i) {
-    $('#lbMedia').replaceChildren(p.image_url ? h('img', { src: p.image_url, alt: p.title }) : [placeholderArt(i), h('div', { class: 'lb-ph-text' }, h('div', {}, h('b', {}, p.title), 'Placeholder tile. Real photo coming soon.'))]);
-    $('#lbCap').textContent = p.title; lb.showModal();
+  const lb = $('#lightbox'); let LB = { box: null, i: 0 };
+  function lbShow() {
+    const { box, i } = LB, p = box.photos[i];
+    $('#lbMedia').replaceChildren(h('img', { src: p.image_url, alt: `${box.title}, photo ${i + 1}` }),
+      box.photos.length > 1 ? h('button', { class: 'icon-btn lb-nav prev', type: 'button', 'aria-label': 'Previous photo', onclick: () => lbStep(-1) }, icon('back')) : null,
+      box.photos.length > 1 ? h('button', { class: 'icon-btn lb-nav next', type: 'button', 'aria-label': 'Next photo', onclick: () => lbStep(1) }, icon('arrow')) : null);
+    $('#lbCap').textContent = box.photos.length > 1 ? `${box.title} · ${i + 1} of ${box.photos.length}` : box.title;
+    const nx = box.photos[(i + 1) % box.photos.length]; if (nx) { const pre = new Image(); pre.src = nx.image_url; }
   }
+  function lbStep(d) { const n = LB.box.photos.length; LB.i = (LB.i + d + n) % n; lbShow(); }
+  function openLightbox(box, idx) {
+    if (!box.photos.length) {
+      $('#lbMedia').replaceChildren(placeholderArt(idx), h('div', { class: 'lb-ph-text' }, h('div', {}, h('b', {}, box.title), 'Placeholder tile. Real photo coming soon.')));
+      $('#lbCap').textContent = box.title; lb.showModal(); return;
+    }
+    LB = { box, i: 0 }; lbShow(); lb.showModal();
+  }
+  lb.addEventListener('keydown', e => { if (!LB.box || LB.box.photos.length < 2) return; if (e.key === 'ArrowRight') lbStep(1); if (e.key === 'ArrowLeft') lbStep(-1); });
+  let tx = null;
+  lb.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  lb.addEventListener('touchend', e => { if (tx == null || !LB.box || LB.box.photos.length < 2) return; const dx = e.changedTouches[0].clientX - tx; tx = null; if (Math.abs(dx) > 40) lbStep(dx < 0 ? 1 : -1); });
   $('#lbClose').addEventListener('click', () => lb.close());
   lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
 

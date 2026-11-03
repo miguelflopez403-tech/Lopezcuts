@@ -1096,26 +1096,35 @@
   // ===================================================================
   function viewPortfolio() {
     const items = D.portfolio_items.slice().sort(by('sort'));
+    const boxName = it => (it.category || it.title || 'Cuts').trim();
+    const photos = items.filter(i => i.image_url), empties = items.filter(i => !i.image_url);
+    const boxes = [...new Set(photos.map(boxName))];
+    if (!UI.pfBox || (!boxes.includes(UI.pfBox) && !UI.pfCustom)) UI.pfBox = boxes[0] || 'Fresh cuts';
+    const maxSort = () => Math.max(0, ...items.map(i => i.sort || 0));
+    const pick = h('select', { class: 'inp', 'aria-label': 'Box to upload into', style: 'width:auto', onchange: e => { if (e.target.value === '__new') { const n = (prompt('Name the new box (for example "Fades" or "Curly")') || '').trim().slice(0, 40); if (n) { UI.pfBox = n; UI.pfCustom = true; } render(); } else { UI.pfBox = e.target.value; UI.pfCustom = false; } } },
+      [...new Set([...boxes, UI.pfBox])].map(b => h('option', { value: b, selected: b === UI.pfBox }, b)), h('option', { value: '__new' }, '+ New box…'));
     const up = h('label', { class: 'btn gold upload' }, icon('plus'), 'Upload photos', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, onchange: async e => {
-      const files = [...e.target.files]; if (!files.length) return; let max = Math.max(0, ...items.map(i => i.sort || 0));
+      const files = [...e.target.files]; if (!files.length) return; let max = maxSort();
       for (const f of files) {
-        try { toast(`Uploading ${f.name}…`); const url = await LC.upload(f); await LC.insert('portfolio_items', { title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 60), description: '', image_url: url, published: true, sort: ++max }); }
+        try { toast(`Uploading ${f.name}…`); const url = await LC.upload(f); await LC.insert('portfolio_items', { title: UI.pfBox, category: UI.pfBox, description: '', image_url: url, published: true, sort: ++max }); }
         catch (err) { toast(err.message); }
       }
-      toast('Photos added. Give each one a title.'); refresh(['portfolio_items']);
+      toast(`Added to ${UI.pfBox}`); refresh(['portfolio_items']);
     } }));
-    const addBox = h('button', { class: 'btn', type: 'button', onclick: async () => { const max = Math.max(0, ...items.map(i => i.sort || 0)); await run(() => LC.insert('portfolio_items', { title: 'New cut', description: '', image_url: null, published: true, sort: max + 1 }), 'Box added. Give it a title and a photo.'); refresh(['portfolio_items']); } }, icon('plus'), 'Add box');
-    const move = async (it, dir) => { const i = items.indexOf(it), j = i + dir; if (j < 0 || j >= items.length) return; const o = items[j]; await Promise.all([LC.update('portfolio_items', it.id, { sort: o.sort }), LC.update('portfolio_items', o.id, { sort: it.sort === o.sort ? it.sort + dir : it.sort })]); refresh(['portfolio_items']); };
+    const makeCover = async it => { const box = photos.filter(p => boxName(p) === boxName(it)); const first = box[0]; if (first === it) return; await run(() => Promise.all([LC.update('portfolio_items', it.id, { sort: first.sort }), LC.update('portfolio_items', first.id, { sort: it.sort })]), 'Cover changed'); refresh(['portfolio_items']); };
+    const moveBox = async (it, to) => { if (to === '__new') { to = (prompt('Name the new box') || '').trim().slice(0, 40); if (!to) return render(); } await run(() => LC.update('portfolio_items', it.id, { category: to, title: to }), `Moved to ${to}`); refresh(['portfolio_items']); };
+    const card = (it, isCover) => h('div', { class: 'pf' },
+      h('div', { class: 'img' }, h('img', { src: it.image_url, alt: boxName(it), loading: 'lazy' }), isCover ? h('span', { class: 'badge' }, '★ Cover') : (!it.published ? h('span', { class: 'badge' }, 'Hidden') : null)),
+      h('div', { class: 'body' },
+        h('select', { class: 'inp', 'aria-label': 'Box', onchange: e => moveBox(it, e.target.value) }, boxes.map(b => h('option', { value: b, selected: b === boxName(it) }, b)), h('option', { value: '__new' }, '+ New box…')),
+        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: it.published, onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { published: e.target.checked }), e.target.checked ? 'Showing on site' : 'Hidden from site'); refresh(['portfolio_items']); } }), 'Show on site'),
+        h('div', { class: 'tools' }, isCover ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => makeCover(it) }, '★ Make cover'), armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
+    const emptyCard = it => h('div', { class: 'pf' }, h('div', { class: 'img' }, h('span', { class: 'ph' }, it.title), h('span', { class: 'badge' }, it.published ? 'Placeholder' : 'Hidden')),
+      h('div', { class: 'body' }, h('b', {}, it.title), h('div', { class: 'tools' }, armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
     return [
-      h('div', { class: 'row between', style: 'margin-bottom:14px' }, h('p', { class: 'hint', style: 'max-width:620px' }, 'These tiles are the "The Work" gallery on your site. Add box makes a new empty tile; Upload photos makes one tile per photo. Tiles without a photo show a styled placeholder.'), h('div', { class: 'row' }, addBox, up)),
-      items.length ? h('div', { class: 'pf-grid' }, items.map(it => {
-        const title = h('input', { class: 'inp', value: it.title, 'aria-label': 'Title', onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { title: e.target.value }), 'Saved'); refresh(['portfolio_items']); } });
-        const replace = h('label', { class: 'btn sm upload' }, it.image_url ? 'Replace photo' : 'Add photo', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { toast('Uploading…'); const url = await LC.upload(f); await LC.update('portfolio_items', it.id, { image_url: url, description: '' }); toast('Photo added'); refresh(['portfolio_items']); } catch (err) { toast(err.message); } } }));
-        return h('div', { class: 'pf' }, h('div', { class: 'img' }, it.image_url ? h('img', { src: it.image_url, alt: it.title, loading: 'lazy' }) : h('span', { class: 'ph' }, it.title), !it.image_url ? h('span', { class: 'badge' }, 'Placeholder') : (!it.published ? h('span', { class: 'badge' }, 'Hidden') : null)),
-          h('div', { class: 'body' }, title,
-            h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: it.published, onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { published: e.target.checked }), e.target.checked ? 'Showing on site' : 'Hidden from site'); refresh(['portfolio_items']); } }), 'Show on site'),
-            h('div', { class: 'tools' }, replace, h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Move earlier', onclick: () => move(it, -1) }, icon('left')), h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Move later', onclick: () => move(it, 1) }, icon('right')), armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
-      })) : h('div', { class: 'empty' }, 'No portfolio boxes yet. Tap Add box or Upload photos.'),
+      h('div', { class: 'row between', style: 'margin-bottom:14px;gap:12px;flex-wrap:wrap' }, h('p', { class: 'hint', style: 'max-width:560px' }, 'Each box is one tile in "The Work" on your site. The ★ cover photo shows on the tile, and tapping it opens every photo in the box. Pick a box, then Upload photos to add to it.'), h('div', { class: 'row' }, pick, up)),
+      photos.length ? h('div', {}, boxes.map(b => { const list = photos.filter(p => boxName(p) === b); return h('section', { style: 'margin-bottom:22px' }, h('h3', { style: 'margin:0 0 10px' }, `${b} `, h('span', { class: 'muted small' }, `${list.length} photo${list.length > 1 ? 's' : ''}`)), h('div', { class: 'pf-grid' }, list.map((it, i) => card(it, i === 0)))); })) : h('div', { class: 'empty' }, 'No photos yet. Pick or create a box, then tap Upload photos.'),
+      empties.length ? h('details', { style: 'margin-top:10px' }, h('summary', { class: 'muted' }, `Old placeholder tiles (${empties.length})${photos.length ? ', not shown on the site' : ''}`), h('div', { class: 'pf-grid', style: 'margin-top:10px' }, empties.map(emptyCard))) : null,
     ];
   }
 
