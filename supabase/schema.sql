@@ -167,9 +167,13 @@ create table if not exists public.clients (
   marketing_opt_in  boolean not null default false,
   blocked           boolean not null default false, -- blocks online booking
   source            text not null default 'manual', -- online, manual, walk_in, booksy
+  prior_visits      int not null default 0 check (prior_visits >= 0), -- visits before this site (Booksy)
+  prior_last_visit  date,                                             -- last visit before this site
   created_by        uuid default auth.uid(),
   created_at        timestamptz not null default now()
 );
+alter table public.clients add column if not exists prior_visits int not null default 0 check (prior_visits >= 0);
+alter table public.clients add column if not exists prior_last_visit date;
 create index if not exists clients_name_idx on public.clients (lower(full_name));
 
 create table if not exists public.client_notes (          -- dated history notes
@@ -695,7 +699,8 @@ begin
     raise exception 'You already have % upcoming bookings. Text % if you need another.', v_active, s.phone;
   end if;
 
-  v_new := not exists (select 1 from public.appointments where client_id = v_client.id and status = 'completed');
+  v_new := v_client.prior_visits = 0
+           and not exists (select 1 from public.appointments where client_id = v_client.id and status = 'completed');
   if svc.first_visit_only and not v_new then
     raise exception 'Welcome back! That option is for first visits. Please pick the returning client haircut.';
   end if;
@@ -829,7 +834,8 @@ begin
     raise exception 'That time is outside working hours or already taken.';
   end if;
 
-  v_new := not exists (select 1 from public.appointments where client_id = v_client and status = 'completed');
+  v_new := not exists (select 1 from public.clients where id = v_client and prior_visits > 0)
+           and not exists (select 1 from public.appointments where client_id = v_client and status = 'completed');
   insert into public.appointments (client_id, staff_id, service_id, addon_ids, starts_at, ends_at, price,
                                    new_client, source, internal_note)
   values (v_client, p_staff_id, svc.id, v_addons, p_starts_at, p_starts_at + make_interval(mins => v_dur),
@@ -915,6 +921,31 @@ revoke execute on function public.reopen_appointment(uuid) from anon;
 revoke execute on function public.handle_new_user() from anon, authenticated;
 revoke execute on function public.write_audit() from anon, authenticated;
 revoke execute on function public.guard_profiles() from anon, authenticated;
+
+-- =====================================================================
+--  Client totals over their whole history (dashboard Clients page).
+--  security_invoker: the view obeys the same row rules as the tables,
+--  so employees only see their own clients and never see money.
+-- =====================================================================
+create or replace view public.client_stats with (security_invoker = true) as
+select c.id as client_id,
+       (count(a.id) filter (where a.status = 'completed') + c.prior_visits)::int as visits,
+       greatest(max(a.starts_at) filter (where a.status = 'completed'),
+                (c.prior_last_visit + time '18:00') at time zone 'UTC') as last_visit,
+       min(a.starts_at) filter (where a.status in ('booked', 'confirmed') and a.starts_at > now()) as next_visit,
+       (count(a.id) filter (where a.status = 'no_show'))::int as no_shows,
+       (count(a.id) filter (where a.status = 'cancelled'))::int as cancels,
+       coalesce((select sum(p.amount + p.tip) from public.payments p
+                 where p.client_id = c.id
+                    or p.appointment_id in (select x.id from public.appointments x where x.client_id = c.id)), 0) as spend,
+       coalesce((select sum(p.tip) from public.payments p
+                 where p.client_id = c.id
+                    or p.appointment_id in (select x.id from public.appointments x where x.client_id = c.id)), 0) as tips
+from public.clients c
+left join public.appointments a on a.client_id = c.id
+group by c.id;
+revoke all on public.client_stats from anon;
+grant select on public.client_stats to authenticated;
 
 -- =====================================================================
 --  Live updates in the dashboard (new bookings pop up instantly)

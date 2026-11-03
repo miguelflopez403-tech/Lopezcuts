@@ -100,6 +100,7 @@
         return o.limit ? out.slice(0, o.limit) : out;
       },
       async insert(table, row) { await ready; const d = await q(sb.from(table).insert(row).select()); emit(table); return d && d[0]; },
+      async insertMany(table, rows) { await ready; const out = []; for (let i = 0; i < rows.length; i += 200) { const d = await q(sb.from(table).insert(rows.slice(i, i + 200)).select()); out.push(...(d || [])); } emit(table); return out; },
       async update(table, id, patch, key = 'id') { await ready; const d = await q(sb.from(table).update(patch).eq(key, id).select()); emit(table); return d && d[0]; },
       async upsert(table, row, onConflict) { await ready; const d = await q(sb.from(table).upsert(row, onConflict ? { onConflict } : undefined).select()); emit(table); return d && d[0]; },
       async remove(table, id, key = 'id') { await ready; await q(sb.from(table).delete().eq(key, id)); emit(table); },
@@ -291,7 +292,8 @@
     }
     const audit = (table, action, row) => { if (['payments', 'expenses', 'budgets', 'settings', 'profiles', 'staff_invites', 'services'].includes(table)) db.audit_log.unshift({ id: db.audit_log.length + 1, at: new Date().toISOString(), actor: me().id, table_name: table, action, row_id: String(row.id || row.email || row.category || ''), old_data: null, new_data: row }); db.audit_log = db.audit_log.slice(0, 300); };
     const keyOf = t => t === 'staff_invites' ? 'email' : (t === 'budgets' ? 'category' : 'id');
-    const commit = (t) => { store.save(); emit(t); };
+    let bulk = false;
+    const commit = (t) => { if (bulk) return; store.save(); emit(t); };
     const clone = x => JSON.parse(JSON.stringify(x));
     const overlaps = (a1, a2, b1, b2) => a1 < b2 && b1 < a2;
     const S = () => db.settings[0];
@@ -360,7 +362,7 @@
         else { if (c.blocked) fail(`Online booking isn't available for this number. Please text ${s.phone} to book.`); if (email && !c.email) c.email = email; }
         const active = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now()).length;
         if (active >= s.max_active_bookings) fail(`You already have ${active} upcoming bookings. Text ${s.phone} if you need another.`);
-        const isNew = !db.appointments.some(a => a.client_id === c.id && a.status === 'completed');
+        const isNew = !(c.prior_visits > 0) && !db.appointments.some(a => a.client_id === c.id && a.status === 'completed');
         if (svc.first_visit_only && !isNew) fail('Welcome back! That option is for first visits. Please pick the returning client haircut.');
         const price = (isNew && svc.new_client_price != null ? +svc.new_client_price : +svc.price) + ad.price;
         const a = { id: uuid(), client_id: c.id, staff_id: p_staff_id, service_id: svc.id, addon_ids: ad.ids, starts_at: startIso, ends_at: new Date(+new Date(startIso) + dur * 6e4).toISOString(), status: 'booked', price, new_client: isNew, source: 'online', client_message: String(p_note || '').slice(0, 500), internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: '', created_by: null, created_at: new Date().toISOString() };
@@ -428,7 +430,7 @@
         return clone(rows);
       },
       async insert(table, row) {
-        await tick(); guard(table, 'insert');
+        if (!bulk) await tick(); guard(table, 'insert');
         const k = keyOf(table); const r = { ...row }; if (k === 'id' && !r.id) r.id = uuid();
         if ('created_at' in r || ['clients', 'expenses', 'client_notes', 'time_off', 'portfolio_items', 'staff_invites', 'reviews'].includes(table)) r.created_at = r.created_at || new Date().toISOString();
         if (table === 'clients') { if (r.phone && db.clients.some(c => c.phone === r.phone)) throw new ApiError('A client with that phone number already exists.'); r.created_by = me().id; r.tags = r.tags || []; r.notes = r.notes || ''; }
@@ -436,6 +438,7 @@
         if (table === 'expenses') r.created_by = me().id;
         (db[table] = db[table] || []).push(r); audit(table, 'insert', r); commit(table); return clone(r);
       },
+      async insertMany(table, rows) { bulk = true; const out = []; try { for (const r of rows) out.push(await this.insert(table, r)); } finally { bulk = false; } commit(table); return out; },
       async update(table, id, patch, key) {
         await tick(); guard(table, 'update'); key = key || keyOf(table);
         const r = (db[table] || []).find(x => x[key] === id); if (!r) throw new ApiError('That item no longer exists.');

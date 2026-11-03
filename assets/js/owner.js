@@ -168,6 +168,7 @@
     working_hours: () => LC.list('working_hours'),
     time_off: () => LC.list('time_off', { order: 'starts_at' }),
     clients: () => LC.list('clients', { order: 'full_name' }),
+    client_stats: () => LC.list('client_stats').catch(() => []),
     client_notes: () => LC.list('client_notes', { order: 'created_at', asc: false }),
     appointments: () => LC.list('appointments', { gte: { starts_at: since() }, order: 'starts_at' }),
     inventory: () => LC.list('inventory', { order: 'name' }),
@@ -182,6 +183,7 @@
   };
   async function load(tables = Object.keys(LOADERS)) {
     D = D || {};
+    if (!tables.includes('client_stats') && tables.some(t => ['clients', 'appointments', 'payments'].includes(t))) tables = [...tables, 'client_stats'];
     const res = await Promise.all(tables.map(t => Promise.resolve().then(LOADERS[t]).catch(e => { console.warn(t, e); return D[t] || []; })));
     tables.forEach((t, i) => { D[t] = res[i]; });
     if (S().timezone) T.tz = S().timezone;
@@ -204,6 +206,13 @@
       s.next = s.appts.filter(a => ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > now).sort(by('starts_at')).at(0)?.starts_at || null;
       done.forEach(a => { const p = D.payByAppt.get(a.id); if (p) { s.spend += +p.amount + +p.tip; s.tips += +p.tip; } });
       if (done.length >= 2) { const ts = done.map(a => +new Date(a.starts_at)).sort((x, y) => x - y); s.avgGap = (ts.at(-1) - ts[0]) / (ts.length - 1) / 864e5; s.dueBack = new Date(ts.at(-1) + s.avgGap * 864e5).toISOString(); }
+    });
+    // Whole-history totals from the database (the list above only holds the last ~13 months).
+    const life = new Map((D.client_stats || []).map(r => [r.client_id, r]));
+    st.forEach((s, id) => {
+      const c = D.client.get(id), L = life.get(id);
+      if (L) { s.visits = L.visits; s.last = L.last_visit; s.noShows = L.no_shows; s.cancels = L.cancels; if (isAdmin()) { s.spend = +L.spend; s.tips = +L.tips; } }
+      else { s.visits += c.prior_visits || 0; if (c.prior_last_visit && (!s.last || c.prior_last_visit > s.last.slice(0, 10))) s.last = c.prior_last_visit + 'T18:00:00Z'; }
     });
     D.stats = st;
   }
@@ -761,6 +770,7 @@
     return [
       h('div', { class: 'row between', style: 'margin-bottom:12px' }, search,
         h('div', { class: 'row' }, isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: () => csv('lopezcuts-clients.csv', [['Name', 'Phone', 'Email', 'Visits', 'Last visit', 'No-shows', 'Spent', 'Tags', 'Notes'], ...list.map(r => [r.c.full_name, fmtPhone(r.c.phone), r.c.email, r.s.visits, r.s.last ? T.day(r.s.last) : '', r.s.noShows, r.s.spend, (r.c.tags || []).join(' '), r.c.notes])]) }, icon('down'), 'Export') : null,
+          isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: openImport }, icon('up'), 'Import from Booksy') : null,
           h('button', { class: 'btn gold', type: 'button', onclick: () => openClientForm() }, icon('plus'), 'Add client'))),
       h('div', { class: 'chips', style: 'margin-bottom:14px' }, Object.keys(F).map(k => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(UI.clientFilter === k), onclick: () => { UI.clientFilter = k; render(); } }, labels[k], h('span', { class: 'ct' }, rows.filter(F[k]).length)))),
       list.length ? h('div', { class: 'tbl-wrap' }, h('table', {},
@@ -784,16 +794,90 @@
     const tg = h('input', { id: 'cfTags', placeholder: 'VIP, Curly, Student', value: (c?.tags || []).join(', ') });
     const mk = h('input', { type: 'checkbox', id: 'cfMkt', checked: c?.marketing_opt_in });
     const bl = h('input', { type: 'checkbox', id: 'cfBlock', checked: c?.blocked });
+    const pv = h('input', { id: 'cfPrior', type: 'number', min: '0', step: '1', value: String(c?.prior_visits || 0) });
+    const pl = h('input', { id: 'cfPriorLast', type: 'date', value: c?.prior_last_visit || '' });
     const err = h('div');
     modal(c ? 'Edit client' : 'Add client', [field('Name', nm), h('div', { class: 'row' }, field('Phone', ph), field('Email', em)), h('div', { class: 'row' }, field('Birthday', bd), field('Tags', tg, 'Separate with commas')),
+      h('div', { class: 'row' }, field('Visits on Booksy', pv, 'Added to their visit count'), field('Last Booksy visit', pl)),
       h('label', { class: 'toggle' }, mk, 'OK to text about openings and promos'), h('label', { class: 'toggle' }, bl, 'Block online booking for this client'), err,
       h('button', { class: 'btn gold block', type: 'button', onclick: async () => {
         if (!nm.value.trim()) { err.replaceChildren(h('div', { class: 'err' }, 'Enter a name.')); return; }
         const phone = ph.value.trim() ? normPhone(ph.value) : null; if (ph.value.trim() && !phone) { err.replaceChildren(h('div', { class: 'err' }, 'That phone number doesn\'t look right.')); return; }
-        const row = { full_name: nm.value.trim(), phone, email: em.value.trim().toLowerCase() || null, birthday: bd.value || null, tags: tg.value.split(',').map(x => x.trim()).filter(Boolean), marketing_opt_in: mk.checked, blocked: bl.checked };
+        const row = { full_name: nm.value.trim(), phone, email: em.value.trim().toLowerCase() || null, birthday: bd.value || null, tags: tg.value.split(',').map(x => x.trim()).filter(Boolean), marketing_opt_in: mk.checked, blocked: bl.checked, prior_visits: Math.max(0, parseInt(pv.value, 10) || 0), prior_last_visit: pl.value || null };
         try { const r = c ? await LC.update('clients', c.id, row) : await LC.insert('clients', { ...row, source: 'manual' }); modalEl.close(); toast(c ? 'Saved' : 'Client added'); await refresh(['clients']); openClient((r || c).id); }
         catch (e) { err.replaceChildren(h('div', { class: 'err' }, /duplicate|unique/i.test(e.message) ? 'A client with that phone number already exists.' : e.message)); }
       } }, c ? 'Save' : 'Add client')]);
+  }
+  // ---------------- Import clients (Booksy export or any spreadsheet saved as CSV)
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    text = text.replace(/^﻿/, '');
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',' || ch === ';' || ch === '\t') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(r => r.some(x => x.trim()));
+  }
+  function toISODate(v) {
+    v = String(v || '').trim(); if (!v) return null;
+    let m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/); if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
+    const d = new Date(v); return isNaN(d) ? null : d.toISOString().slice(0, 10);
+  }
+  function mapClientRows(rows) {
+    const head = rows[0].map(x => x.trim().toLowerCase());
+    const col = (...res) => head.findIndex(hd => res.some(re => re.test(hd)));
+    const ix = {
+      name: col(/^(client |customer )?(full )?name$/, /^client$/, /^customer$/), first: col(/first/), last: col(/^last ?name|surname/),
+      phone: col(/phone|mobile|cell/), email: col(/e-?mail/), visits: col(/visits|appointments|bookings|^no\.? of/),
+      lastVisit: col(/last (visit|appointment|booking)|last seen|recent/), birthday: col(/birth/), notes: col(/note/), tags: col(/tag|group/),
+    };
+    const get = (r, k) => ix[k] >= 0 ? String(r[ix[k]] ?? '').trim() : '';
+    return { ix, people: rows.slice(1).map(r => {
+      const full = get(r, 'name') || [get(r, 'first'), get(r, 'last')].filter(Boolean).join(' ');
+      return { full_name: full.replace(/\s+/g, ' ').slice(0, 120), phone: normPhone(get(r, 'phone')), email: get(r, 'email').toLowerCase() || null,
+        prior_visits: Math.max(0, parseInt(get(r, 'visits').replace(/\D/g, ''), 10) || 0), prior_last_visit: toISODate(get(r, 'lastVisit')),
+        birthday: toISODate(get(r, 'birthday')), notes: get(r, 'notes'), tags: get(r, 'tags') ? get(r, 'tags').split(/[,;|]/).map(x => x.trim()).filter(Boolean) : [] };
+    }).filter(p => p.full_name) };
+  }
+  function openImport() {
+    const out = h('div', { class: 'stack' });
+    const file = h('input', { type: 'file', accept: '.csv,text/csv,text/plain', onchange: async e => {
+      const f = e.target.files[0]; if (!f) return;
+      if (/\.xlsx?$/i.test(f.name)) { out.replaceChildren(h('div', { class: 'err' }, 'That is an Excel file. Open it in Excel or Google Sheets, choose File → Download (or Save As) → CSV, then pick the CSV here.')); return; }
+      const rows = parseCSV(await f.text()); if (rows.length < 2) { out.replaceChildren(h('div', { class: 'err' }, 'No rows found in that file.')); return; }
+      const { ix, people } = mapClientRows(rows);
+      if (ix.name < 0 && ix.first < 0) { out.replaceChildren(h('div', { class: 'err' }, 'Couldn\'t find a Name column. The first row should have column names like Name, Phone, Email, Visits, Last visit.')); return; }
+      const byPhone = new Map(D.clients.filter(c => c.phone).map(c => [c.phone, c]));
+      const byName = new Map(D.clients.filter(c => !c.phone).map(c => [c.full_name.toLowerCase(), c]));
+      const seen = new Set(); const add = [], upd = [];
+      people.forEach(p => {
+        const key = p.phone || 'n:' + p.full_name.toLowerCase(); if (seen.has(key)) return; seen.add(key);
+        const ex = p.phone ? byPhone.get(p.phone) : byName.get(p.full_name.toLowerCase());
+        if (ex) upd.push([ex, p]); else add.push(p);
+      });
+      const found = ['phone', 'email', 'visits', 'lastVisit', 'birthday', 'notes'].filter(k => ix[k] >= 0).map(k => ({ phone: 'phone', email: 'email', visits: 'visit count', lastVisit: 'last visit', birthday: 'birthday', notes: 'notes' })[k]);
+      out.replaceChildren(
+        h('div', { class: 'alert info' }, icon('users'), h('span', {}, `${add.length} new client${add.length === 1 ? '' : 's'} to add, ${upd.length} already here (their Booksy visits and last visit will be updated). Columns found: name${found.length ? ', ' + found.join(', ') : ''}.`)),
+        h('div', { class: 'tbl-wrap', style: 'max-height:260px;overflow:auto' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Name'), h('th', {}, 'Phone'), h('th', { class: 'r' }, 'Visits'), h('th', {}, 'Last visit'))),
+          h('tbody', {}, [...add, ...upd.map(u => u[1])].slice(0, 50).map(p => h('tr', {}, h('td', {}, p.full_name), h('td', { class: 'num' }, fmtPhone(p.phone) || '—'), h('td', { class: 'r num' }, p.prior_visits), h('td', { class: 'num' }, p.prior_last_visit || '—')))))),
+        h('button', { class: 'btn gold block', type: 'button', onclick: async e => {
+          e.target.disabled = true; e.target.textContent = 'Importing…';
+          try {
+            if (add.length) await LC.insertMany('clients', add.map(p => ({ ...p, source: 'booksy' })));
+            for (const [c, p] of upd) await LC.update('clients', c.id, { prior_visits: p.prior_visits, prior_last_visit: p.prior_last_visit || c.prior_last_visit || null, email: c.email || p.email, birthday: c.birthday || p.birthday });
+            modalEl.close(); toast(`Imported ${add.length} new and updated ${upd.length} clients`); refresh(['clients']);
+          } catch (err) { e.target.disabled = false; e.target.textContent = 'Try again'; out.append(h('div', { class: 'err' }, err.message)); }
+        } }, `Import ${add.length + upd.length} clients`));
+    } });
+    modal('Import clients', [
+      h('p', { class: 'hint' }, 'Pick a CSV file of your clients. On Booksy, export your client list from the Clients section of Booksy Biz on a computer. The file needs a Name column; Phone, Email, number of visits, last visit, birthday and notes are picked up too. Clients already here (same phone) are updated, not doubled.'),
+      h('label', { class: 'btn upload' }, icon('up'), 'Choose file', file), out], { wide: true });
   }
   function openClient(id) {
     const c = D.client.get(id); if (!c) return; const s = D.stats.get(id); const now = Date.now();
@@ -815,6 +899,7 @@
       h('button', { class: 'btn sm', type: 'button', style: 'justify-self:start', onclick: async () => { await run(() => LC.update('clients', id, { notes: std.value }), 'Saved'); refresh(['clients']); } }, 'Save notes'),
       h('div', { class: 'f' }, 'Notes history', h('div', { class: 'row' }, newNote, h('button', { class: 'btn sm', type: 'button', onclick: async () => { if (!newNote.value.trim()) return; await run(() => LC.insert('client_notes', { client_id: id, body: newNote.value.trim() }), 'Note added'); await refresh(['client_notes']); openClient(id); } }, 'Add')),
         notes.length ? h('div', { class: 'list' }, notes.map(n => h('div', { class: 'li' }, h('div', { class: 'main' }, h('div', { style: 'font-weight:500;color:var(--ink)' }, n.body), h('div', { class: 's' }, `${T.date(n.created_at, { month: 'short', day: 'numeric', year: 'numeric' })}${D.prof.get(n.author_id) ? ' · ' + (D.prof.get(n.author_id).full_name || D.prof.get(n.author_id).email) : ''}`))))) : null),
+      c.prior_visits ? h('div', { class: 'alert info' }, icon('clock'), `${c.prior_visits} earlier visit${c.prior_visits === 1 ? '' : 's'} on Booksy${c.prior_last_visit ? ', last one ' + T.date(c.prior_last_visit + 'T18:00:00Z') : ''}. Counted in their total.`) : null,
       h('div', { class: 'f' }, `History (${s.appts.length})`, s.appts.length ? h('div', { class: 'list history' }, s.appts.slice(0, 40).map(a => h('div', { class: 'li', onclick: () => openAppt(a) }, h('div', { class: 'main' }, h('div', { class: 't' }, `${T.date(a.starts_at, { month: 'short', day: 'numeric', year: 'numeric' })} · ${T.time(a.starts_at)}`), h('div', { class: 's' }, svcName(a) + (D.staff.length > 1 ? ' · ' + staffName(a.staff_id) : ''))), pill(a.status), h('span', { class: 'num' }, money(isAdmin() && D.payByAppt.get(a.id) ? +D.payByAppt.get(a.id).amount + +D.payByAppt.get(a.id).tip : a.price))))) : h('div', { class: 'empty' }, 'No visits yet.')),
       isOwner() ? armBtn('Delete client and their history', async () => { await run(() => LC.remove('clients', id), 'Client deleted'); drawerEl.close(); refresh(['clients', 'appointments', 'client_notes']); }, 'btn sm danger') : null,
     ]);
