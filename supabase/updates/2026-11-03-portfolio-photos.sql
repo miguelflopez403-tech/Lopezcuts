@@ -39,8 +39,8 @@ from (values
   ('Burst Fade', '/assets/img/portfolio/burst-fade-pattock.jpg', 206),
   ('Burst Fade', '/assets/img/portfolio/miguel-burst-fade.jpg', 207),
   ('Burst Fade', '/assets/img/portfolio/seby-burst-fade.jpg', 208),
-  ('Scissor Work', '/assets/img/portfolio/scissor-work-james.jpg', 300),
-  ('Scissor Work', '/assets/img/portfolio/hink-scissor-work.jpg', 301),
+  ('Scissor Work', '/assets/img/portfolio/scissor-work-james.jpg', 301),
+  ('Scissor Work', '/assets/img/portfolio/hink-scissor-work.jpg', 300),
   ('Scissor Work', '/assets/img/portfolio/scissor-work-2.jpg', 302),
   ('Scissor Work', '/assets/img/portfolio/scissor-work-4.jpg', 303),
   ('Scissor Work', '/assets/img/portfolio/scissor-work-boden.jpg', 304),
@@ -68,3 +68,7 @@ where not exists (select 1 from public.portfolio_items p where p.image_url = v.u
 
 select category as box, count(*) as photos from public.portfolio_items
  where published and image_url like '/assets/img/portfolio/%' group by category order by min(sort);
+
+-- Hink is the Scissor Work cover (also fixes it if this file already ran before that change)
+update public.portfolio_items set sort = 300 where image_url = '/assets/img/portfolio/hink-scissor-work.jpg';
+update public.portfolio_items set sort = 301 where image_url = '/assets/img/portfolio/scissor-work-james.jpg';
