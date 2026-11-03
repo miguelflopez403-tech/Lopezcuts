@@ -45,6 +45,30 @@
       if (el.getBoundingClientRect().top > innerHeight) { el.classList.add('pre'); el.style.transitionDelay = (i % 4) * 70 + 'ms'; io.observe(el); }
     });
   }
+  // Section headlines slide up word by word as they come into view.
+  function setupHeadlines() {
+    if (reduced || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('go'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -10% 0px' });
+    $$('main section h2').forEach(h2 => {
+      if (h2.closest('.hero') || h2.getBoundingClientRect().top < innerHeight) return;
+      let n = 0; const walk = node => [...node.childNodes].forEach(c => {
+        if (c.nodeType === 3) { const frag = document.createDocumentFragment();
+          c.textContent.split(/(\s+)/).forEach(t => { if (!t) return; if (/^\s+$/.test(t)) { frag.append(t); return; }
+            const w = document.createElement('span'); w.className = 'w'; const inner = document.createElement('span'); inner.textContent = t; inner.style.setProperty('--i', n++); w.append(inner); frag.append(w); });
+          c.replaceWith(frag); }
+        else if (c.nodeType === 1) walk(c); });
+      walk(h2); h2.classList.add('split'); io.observe(h2);
+    });
+  }
+  // A soft gold light follows the pointer across cards (desktop only).
+  if (!reduced && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    document.addEventListener('pointermove', e => { const c = e.target.closest?.('.fit-card, .price-card, .review'); if (!c) return;
+      const r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px'); }, { passive: true });
+  }
+  // Barber-pole progress bar along the top as you scroll.
+  { const bar = h('div', { class: 'pole-bar', 'aria-hidden': 'true' }); document.body.append(bar); let tick = false;
+    const upd = () => { tick = false; const max = document.documentElement.scrollHeight - innerHeight; bar.style.transform = `scaleX(${max > 0 ? Math.min(1, scrollY / max) : 0})`; };
+    addEventListener('scroll', () => { if (!tick) { tick = true; requestAnimationFrame(upd); } }, { passive: true }); upd(); }
   function countUp(root) {
     $$('[data-count]', root).forEach(el => {
       const to = +el.dataset.count, suf = el.dataset.suffix || '', plain = 'plain' in el.dataset; const from = plain ? to - 6 : 0; const t0 = performance.now();
@@ -81,43 +105,52 @@
     });
     return [...map.values()];
   }
-  // All photos cycle through one carousel. Boxes take turns (each box's cover first) so the mix stays varied.
-  function carouselPhotos() {
-    const boxes = galleryBoxes().filter(b => b.photos.length);
-    const out = []; let i = 0, more = true;
-    while (more) { more = false; boxes.forEach(b => { if (b.photos[i]) { out.push({ p: b.photos[i], box: b.title }); more = true; } }); i++; }
-    return out;
-  }
+  // One category at a time: chips on top pick the box, the strip auto-advances through that box,
+  // then moves on to the next box. Photos never mix between categories.
   let carTimer = null;
   function renderGallery() {
-    const boxes = galleryBoxes(), photos = carouselPhotos();
-    $('#placeholderNote').hidden = !!photos.length || !boxes.length;
-    if (!photos.length) {
+    const boxes = galleryBoxes(), real = boxes.filter(b => b.photos.length);
+    $('#placeholderNote').hidden = !!real.length || !boxes.length;
+    if (!real.length) {
       $('#gallery').className = 'gallery';
       $('#gallery').replaceChildren(...boxes.map((b, i) => h('button', { class: 'tile', type: 'button', 'aria-label': `${b.title} (placeholder)`, onclick: () => openLightbox(b, i) }, placeholderArt(i), icon('scissors', 'scissor'), h('span', { class: 'badge' }, 'Placeholder'), h('span', { class: 'cap' }, h('b', {}, b.title)))));
       return;
     }
-    const all = { title: 'Portfolio', photos: photos.map(x => x.p) };
-    const track = h('div', { class: 'car-track', tabindex: '0', 'aria-label': 'Portfolio photos, scroll sideways' },
-      photos.map((x, i) => h('button', { class: 'car-card', type: 'button', 'aria-label': `${x.box}, open photo`, onclick: () => { LB = { box: all, i, labels: photos.map(y => y.box) }; lbShow(); lb.showModal(); } },
-        h('img', { src: x.p.image_url, alt: `${x.box} by Lopez Cuts, barber in Salt Lake City`, loading: i < 6 ? 'eager' : 'lazy', decoding: 'async' }),
-        h('span', { class: 'car-cap' }, x.box))));
+    let cur = -1, swapT = 0;
+    const chipEls = real.map((b, i) => h('button', { class: 'car-chip', type: 'button', role: 'tab', 'aria-selected': 'false', onclick: () => { show(i); hold(); } },
+      h('span', {}, b.title), h('small', {}, String(b.photos.length)), h('i', { class: 'car-prog', 'aria-hidden': 'true' })));
+    const chips = h('div', { class: 'car-chips', role: 'tablist', 'aria-label': 'Portfolio categories' }, chipEls);
+    const track = h('div', { class: 'car-track', tabindex: '0', 'aria-label': 'Portfolio photos, scroll sideways' });
+    const progress = () => { const c = chipEls[cur]; if (!c) return; const max = track.scrollWidth - track.clientWidth;
+      c.style.setProperty('--p', max > 4 ? Math.min(1, (track.scrollLeft + track.clientWidth) / track.scrollWidth).toFixed(3) : 1); };
+    track.addEventListener('scroll', progress, { passive: true });
+    function show(i) {
+      cur = (i + real.length) % real.length; const b = real[cur];
+      chipEls.forEach((c, k) => { c.classList.toggle('on', k === cur); c.setAttribute('aria-selected', String(k === cur)); if (k !== cur) c.style.removeProperty('--p'); });
+      const chip = chipEls[cur]; chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: reduced ? 'auto' : 'smooth' });
+      const cards = b.photos.map((p, k) => h('button', { class: 'car-card', type: 'button', style: `--d:${Math.min(k, 5) * 60}ms`, 'aria-label': `${b.title}, photo ${k + 1} of ${b.photos.length}`, onclick: () => { LB = { box: b, i: k }; lbShow(); lb.showModal(); } },
+        h('img', { src: p.image_url, alt: `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: k < 5 ? 'eager' : 'lazy', decoding: 'async' }),
+        h('span', { class: 'car-cap' }, h('b', {}, b.title), h('small', {}, `${k + 1}/${b.photos.length}`))));
+      clearTimeout(swapT); track.classList.add('swap');
+      swapT = setTimeout(() => { track.replaceChildren(...cards); track.scrollLeft = 0; track.classList.remove('swap'); progress(); }, track.children.length && !reduced ? 230 : 0);
+    }
     const step = dir => { const card = track.querySelector('.car-card'); const w = card ? card.getBoundingClientRect().width + 14 : 300;
-      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8;
-      if (dir > 0 && atEnd) track.scrollTo({ left: 0, behavior: 'smooth' }); else track.scrollBy({ left: dir * w, behavior: 'smooth' }); };
+      const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 8, atStart = track.scrollLeft < 8;
+      if (dir > 0 && atEnd) show(cur + 1); else if (dir < 0 && atStart) show(cur - 1); else track.scrollBy({ left: dir * w, behavior: 'smooth' }); };
     const wrap = h('div', { class: 'carousel' }, track,
       h('button', { class: 'icon-btn car-nav prev', type: 'button', 'aria-label': 'Previous photos', onclick: () => { step(-1); hold(); } }, icon('back')),
       h('button', { class: 'icon-btn car-nav next', type: 'button', 'aria-label': 'Next photos', onclick: () => { step(1); hold(); } }, icon('arrow')));
     $('#gallery').className = 'gallery-car';
-    $('#gallery').replaceChildren(wrap);
-    // Auto-advance every few seconds; pause while someone is touching, hovering or the section is off screen.
+    $('#gallery').replaceChildren(chips, wrap);
+    show(0);
+    // Auto-advance; pause while someone is touching or hovering, or the section is off screen.
     let paused = false, visible = false, holdUntil = 0;
-    const hold = () => { holdUntil = Date.now() + 6000; };
+    const hold = () => { holdUntil = Date.now() + 5000; };
     ['pointerenter', 'touchstart', 'focusin'].forEach(ev => wrap.addEventListener(ev, () => { paused = true; }, { passive: true }));
     ['pointerleave', 'touchend', 'focusout'].forEach(ev => wrap.addEventListener(ev, () => { paused = false; hold(); }, { passive: true }));
     if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(wrap); else visible = true;
     clearInterval(carTimer);
-    if (!reduced) carTimer = setInterval(() => { if (visible && !paused && Date.now() > holdUntil && !document.hidden && !lb.open) step(1); }, 2800);
+    if (!reduced) carTimer = setInterval(() => { if (visible && !paused && Date.now() > holdUntil && !document.hidden && !lb.open) step(1); }, 1700);
   }
   const lb = $('#lightbox'); let LB = { box: null, i: 0 };
   function lbShow() {
@@ -472,12 +505,12 @@
       ]);
       Object.assign(state, { settings, services, staff, reviews, portfolio });
       if (settings?.timezone) T.tz = settings.timezone;
-      renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); showMyBooking(); checkHash();
+      renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); setupHeadlines(); showMyBooking(); checkHash();
     } catch (e) {
       console.error(e);
       $('#nextWhen').textContent = 'DM to book'; $('#nextSub').textContent = '@lopezcuts.dmv on Instagram';
       toast('Online booking is having trouble. DM @lopezcuts.dmv on Instagram to book.');
-      setupReveal();
+      setupReveal(); setupHeadlines();
     }
   }
   LC.onData(t => { if (t === '*' || t === 'appointments') nextOpening(); });
