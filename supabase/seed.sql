@@ -71,7 +71,9 @@ select * from (values
   ('Part design', 'Designs', 'Placeholder until real photos are added', 5),
   ('High taper', 'Tapers', 'Placeholder until real photos are added', 6),
   ('Curly top, drop fade', 'Curly', 'Placeholder until real photos are added', 7),
-  ('Freestyle design', 'Designs', 'Placeholder until real photos are added', 8)
+  ('Freestyle design', 'Designs', 'Placeholder until real photos are added', 8),
+  ('Fresh cut', 'Fades', 'Placeholder until real photos are added', 9),
+  ('Clean up', 'Fades', 'Placeholder until real photos are added', 10)
 ) v(title, category, description, sort)
 where not exists (select 1 from public.portfolio_items);
 

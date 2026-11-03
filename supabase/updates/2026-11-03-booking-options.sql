@@ -36,5 +36,11 @@ select 5, v.b, v.n, 'Returning Client', 'booksy', 'published', now() - (v.i || '
 from (values (7, '5⭐️', 'Sam'), (8, 'good cut', 'Tate')) v(i, b, n)
 where not exists (select 1 from public.reviews r where r.source = 'booksy' and r.display_name = v.n and r.body = v.b);
 
+-- 3. Two more portfolio boxes (only added once) ------------------------
+insert into public.portfolio_items (title, description, sort)
+select v.t, 'Placeholder until real photos are added', (select coalesce(max(sort), 0) from public.portfolio_items) + v.i
+from (values ('Fresh cut', 1), ('Clean up', 2)) v(t, i)
+where not exists (select 1 from public.portfolio_items p where p.title = v.t);
+
 -- Check: should list First Time $25, Returning $30, Hometown $25
 select name, price, first_visit_only, bookable from public.services where not is_addon order by sort;

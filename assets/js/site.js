@@ -54,8 +54,9 @@
   }
 
   // ---------------- Portfolio ----------------
-  const CATS = ['All', 'Fades', 'Tapers', 'Lineups', 'Curly', 'Designs', 'Beards'];
-  function placeholderArt(cat, i) {
+  const LOOKS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Designs', 'Beards'];
+  function placeholderArt(i) {
+    const cat = LOOKS[i % LOOKS.length];
     const g = {
       Fades: `linear-gradient(180deg, #4a3f2c 0%, #2a251c 45%, #15130f 100%), repeating-linear-gradient(0deg, rgb(255 255 255 / 4%) 0 1px, transparent 1px 5px)`,
       Tapers: `linear-gradient(160deg, #3b3427 0%, #1d1a15 60%), repeating-linear-gradient(115deg, rgb(255 255 255 / 4%) 0 1px, transparent 1px 7px)`,
@@ -69,22 +70,19 @@
   }
   function renderGallery() {
     const items = state.portfolio;
-    const used = new Set(items.map(p => p.category));
-    $('#workFilters').replaceChildren(...CATS.filter(c => c === 'All' || used.has(c)).map(c => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(state.filter === c), onclick: () => { state.filter = c; renderGallery(); } }, c)));
     $('#placeholderNote').hidden = !items.some(p => !p.image_url);
     const tiles = items.map((p, i) => {
-      const show = state.filter === 'All' || p.category === state.filter;
-      return h('button', { class: 'tile' + (show ? '' : ' hide'), type: 'button', 'aria-label': `${p.title}, ${p.category}${p.image_url ? '' : ' (placeholder)'}`, onclick: () => openLightbox(p, i) },
-        p.image_url ? h('img', { src: p.image_url, alt: p.title, loading: 'lazy' }) : [placeholderArt(p.category, i), h('span', { class: 'ph-word', 'aria-hidden': 'true' }, p.category), icon('scissors', 'scissor')],
+      return h('button', { class: 'tile', type: 'button', 'aria-label': `${p.title}${p.image_url ? '' : ' (placeholder)'}`, onclick: () => openLightbox(p, i) },
+        p.image_url ? h('img', { src: p.image_url, alt: p.title, loading: 'lazy' }) : [placeholderArt(i), icon('scissors', 'scissor')],
         !p.image_url && h('span', { class: 'badge' }, 'Placeholder'),
-        h('span', { class: 'cap' }, h('b', {}, p.title), h('span', {}, p.category)));
+        h('span', { class: 'cap' }, h('b', {}, p.title), p.description && !/^placeholder/i.test(p.description) ? h('span', {}, p.description) : null));
     });
     $('#gallery').replaceChildren(...tiles);
   }
   const lb = $('#lightbox');
   function openLightbox(p, i) {
-    $('#lbMedia').replaceChildren(p.image_url ? h('img', { src: p.image_url, alt: p.title }) : [placeholderArt(p.category, i), h('div', { class: 'lb-ph-text' }, h('div', {}, h('b', {}, p.title), 'Placeholder tile. Real photo coming soon.'))]);
-    $('#lbCap').textContent = `${p.title} · ${p.category}`; lb.showModal();
+    $('#lbMedia').replaceChildren(p.image_url ? h('img', { src: p.image_url, alt: p.title }) : [placeholderArt(i), h('div', { class: 'lb-ph-text' }, h('div', {}, h('b', {}, p.title), 'Placeholder tile. Real photo coming soon.'))]);
+    $('#lbCap').textContent = p.title; lb.showModal();
   }
   $('#lbClose').addEventListener('click', () => lb.close());
   lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });

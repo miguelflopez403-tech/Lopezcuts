@@ -951,29 +951,28 @@
   // ===================================================================
   //  PORTFOLIO
   // ===================================================================
-  const CATS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Designs', 'Beards'];
   function viewPortfolio() {
     const items = D.portfolio_items.slice().sort(by('sort'));
     const up = h('label', { class: 'btn gold upload' }, icon('plus'), 'Upload photos', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, onchange: async e => {
       const files = [...e.target.files]; if (!files.length) return; let max = Math.max(0, ...items.map(i => i.sort || 0));
       for (const f of files) {
-        try { toast(`Uploading ${f.name}…`); const url = await LC.upload(f); await LC.insert('portfolio_items', { title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 60), category: 'Fades', description: '', image_url: url, published: true, sort: ++max }); }
+        try { toast(`Uploading ${f.name}…`); const url = await LC.upload(f); await LC.insert('portfolio_items', { title: f.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').slice(0, 60), description: '', image_url: url, published: true, sort: ++max }); }
         catch (err) { toast(err.message); }
       }
-      toast('Photos added. Set a title and style for each.'); refresh(['portfolio_items']);
+      toast('Photos added. Give each one a title.'); refresh(['portfolio_items']);
     } }));
+    const addBox = h('button', { class: 'btn', type: 'button', onclick: async () => { const max = Math.max(0, ...items.map(i => i.sort || 0)); await run(() => LC.insert('portfolio_items', { title: 'New cut', description: '', image_url: null, published: true, sort: max + 1 }), 'Box added. Give it a title and a photo.'); refresh(['portfolio_items']); } }, icon('plus'), 'Add box');
     const move = async (it, dir) => { const i = items.indexOf(it), j = i + dir; if (j < 0 || j >= items.length) return; const o = items[j]; await Promise.all([LC.update('portfolio_items', it.id, { sort: o.sort }), LC.update('portfolio_items', o.id, { sort: it.sort === o.sort ? it.sort + dir : it.sort })]); refresh(['portfolio_items']); };
     return [
-      h('div', { class: 'row between', style: 'margin-bottom:14px' }, h('p', { class: 'hint', style: 'max-width:620px' }, 'These tiles are the "The Work" gallery on your site. Tiles without a photo show a styled placeholder. Upload a photo to any tile, or add new ones. Photos are resized automatically.'), up),
+      h('div', { class: 'row between', style: 'margin-bottom:14px' }, h('p', { class: 'hint', style: 'max-width:620px' }, 'These tiles are the "The Work" gallery on your site. Add box makes a new empty tile; Upload photos makes one tile per photo. Tiles without a photo show a styled placeholder.'), h('div', { class: 'row' }, addBox, up)),
       items.length ? h('div', { class: 'pf-grid' }, items.map(it => {
         const title = h('input', { class: 'inp', value: it.title, 'aria-label': 'Title', onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { title: e.target.value }), 'Saved'); refresh(['portfolio_items']); } });
-        const cat = h('select', { class: 'inp', 'aria-label': 'Style', onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { category: e.target.value }), 'Saved'); refresh(['portfolio_items']); } }, CATS.map(c => h('option', { selected: c === it.category }, c)));
         const replace = h('label', { class: 'btn sm upload' }, it.image_url ? 'Replace photo' : 'Add photo', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', onchange: async e => { const f = e.target.files[0]; if (!f) return; try { toast('Uploading…'); const url = await LC.upload(f); await LC.update('portfolio_items', it.id, { image_url: url, description: '' }); toast('Photo added'); refresh(['portfolio_items']); } catch (err) { toast(err.message); } } }));
-        return h('div', { class: 'pf' }, h('div', { class: 'img' }, it.image_url ? h('img', { src: it.image_url, alt: it.title, loading: 'lazy' }) : h('span', { class: 'ph' }, it.category), !it.image_url ? h('span', { class: 'badge' }, 'Placeholder') : (!it.published ? h('span', { class: 'badge' }, 'Hidden') : null)),
-          h('div', { class: 'body' }, title, cat,
+        return h('div', { class: 'pf' }, h('div', { class: 'img' }, it.image_url ? h('img', { src: it.image_url, alt: it.title, loading: 'lazy' }) : h('span', { class: 'ph' }, it.title), !it.image_url ? h('span', { class: 'badge' }, 'Placeholder') : (!it.published ? h('span', { class: 'badge' }, 'Hidden') : null)),
+          h('div', { class: 'body' }, title,
             h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: it.published, onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { published: e.target.checked }), e.target.checked ? 'Showing on site' : 'Hidden from site'); refresh(['portfolio_items']); } }), 'Show on site'),
             h('div', { class: 'tools' }, replace, h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Move earlier', onclick: () => move(it, -1) }, icon('left')), h('button', { class: 'btn sm', type: 'button', 'aria-label': 'Move later', onclick: () => move(it, 1) }, icon('right')), armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
-      })) : h('div', { class: 'empty' }, 'No portfolio items yet. Upload your first photos.'),
+      })) : h('div', { class: 'empty' }, 'No portfolio boxes yet. Tap Add box or Upload photos.'),
     ];
   }
 

@@ -151,7 +151,7 @@
   //  DEMO BACKEND (same tables + functions, in this browser)
   // ==================================================================
   function demoBackend() {
-    const KEY = 'lopezcuts-demo-v7';
+    const KEY = 'lopezcuts-demo-v8';
     const ROLE_KEY = 'lopezcuts-demo-role';
     let db = null;
     let memRole = 'owner';
@@ -216,7 +216,7 @@
       const reviews = [['If you need a haircut this your guy', 'Max', 'Returning Client'], ['Best hair cut i’ve received in a minute', 'Jason', 'First Time Client'], ['Absolute class service', 'Will', 'Returning Client'], ['Dudes nice with it', 'Jonah', 'First Time Client'], ['Fire cut w barber', 'Evan', 'First Time Client'], ['Fire cuts', 'Justin', 'Returning Client'], ['5⭐️', 'Sam', 'Returning Client'], ['good cut', 'Tate', 'Returning Client']];
       reviews.forEach(([b, n, l], i) => d.reviews.push({ id: uuid(), appointment_id: null, client_id: null, rating: 5, body: b, display_name: n, label: l, source: 'booksy', status: 'published', reply: '', created_at: new Date(now - (i + 1) * 864e5 * 6).toISOString() }));
 
-      [['Mid skin fade', 'Fades'], ['Low taper with curls', 'Curly'], ['Crisp lineup', 'Lineups'], ['Burst fade', 'Fades'], ['Beard shape-up', 'Beards'], ['Part design', 'Designs'], ['High taper', 'Tapers'], ['Curly top, drop fade', 'Curly'], ['Freestyle design', 'Designs']]
+      [['Mid skin fade', 'Fades'], ['Low taper with curls', 'Curly'], ['Crisp lineup', 'Lineups'], ['Burst fade', 'Fades'], ['Beard shape-up', 'Beards'], ['Part design', 'Designs'], ['High taper', 'Tapers'], ['Curly top, drop fade', 'Curly'], ['Freestyle design', 'Designs'], ['Fresh cut', 'Fades'], ['Clean up', 'Fades']]
         .forEach(([t, c], i) => d.portfolio_items.push({ id: uuid(), title: t, category: c, description: 'Placeholder until real photos are added', image_url: null, published: true, sort: i, created_at: now.toISOString() }));
 
       const first = ['Andre', 'Bryce', 'Carlos', 'Dante', 'Eli', 'Fabian', 'Gavin', 'Hector', 'Isaiah', 'Jalen', 'Kai', 'Luis', 'Marcus', 'Nico', 'Omar', 'Preston', 'Quinn', 'Rafael', 'Sam', 'Tyrese'];
