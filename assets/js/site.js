@@ -287,7 +287,7 @@
       try {
         const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: f.note.trim() });
         try { if (f.remember) localStorage.setItem('lopezcuts-me', JSON.stringify({ name: f.name, phone: f.phone, email: f.email, remember: true })); else localStorage.removeItem('lopezcuts-me'); } catch { }
-        B.result = r; B.form.note = ''; B.busy = false; go(3); nextOpening();
+        rememberBooking(r); B.result = r; B.form.note = ''; B.busy = false; go(3); nextOpening();
       } catch (e) {
         B.busy = false; B.error = e.message;
         if (/taken/i.test(e.message)) { B.slot = null; go(1); B.error = e.message; } else render();
@@ -325,6 +325,7 @@
     body.replaceChildren(h('div', { class: 'skeleton', style: 'height:160px' }));
     let bk;
     try { bk = await LC.rpc('get_booking', { p_token: token }); } catch (e) { body.replaceChildren(h('div', { class: 'err' }, e.message)); return; }
+    if (['booked', 'confirmed'].includes(bk.status) && bk.starts_at) rememberBooking({ token, starts_at: bk.starts_at, ends_at: bk.ends_at }); else forgetBooking(token);
     if (!bk) { body.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find that booking. Check the link or text (571) 599-9297.')); return; }
     const label = { booked: 'Booked', confirmed: 'Confirmed', completed: 'Completed', no_show: 'Missed', cancelled: 'Cancelled' }[bk.status];
     const view = [
@@ -354,6 +355,15 @@
     view.push(msg, h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book another cut'));
     body.replaceChildren(h('div', { class: 'step-anim' }, view));
   }
+  // This device remembers upcoming bookings so "My booking" in the top bar opens them.
+  const savedBookings = () => { try { return (JSON.parse(localStorage.getItem('lopezcuts-bookings') || '[]') || []).filter(b => b && b.token && new Date(b.ends_at || b.starts_at) > Date.now()); } catch { return []; } };
+  function rememberBooking(r) { try { const list = savedBookings().filter(b => b.token !== r.token); list.push({ token: r.token, starts_at: r.starts_at, ends_at: r.ends_at }); localStorage.setItem('lopezcuts-bookings', JSON.stringify(list.slice(-5))); } catch { } showMyBooking(); }
+  function forgetBooking(token) { try { localStorage.setItem('lopezcuts-bookings', JSON.stringify(savedBookings().filter(b => b.token !== token))); } catch { } showMyBooking(); }
+  function showMyBooking() {
+    const btn = $('#myBooking'); if (!btn) return; const next = savedBookings().sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))[0];
+    btn.hidden = !next; if (next) btn.onclick = () => { location.hash = '#manage-' + next.token; };
+  }
+  window.addEventListener('hashchange', () => checkHash());
   function checkHash() { const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
   addEventListener('hashchange', checkHash);
   $('#findBooking').addEventListener('click', () => {
@@ -376,7 +386,7 @@
       ]);
       Object.assign(state, { settings, services, staff, reviews, portfolio });
       if (settings?.timezone) T.tz = settings.timezone;
-      renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); checkHash();
+      renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); showMyBooking(); checkHash();
     } catch (e) {
       console.error(e);
       $('#nextWhen').textContent = 'Text to book'; $('#nextSub').textContent = '(571) 599-9297';
