@@ -3,8 +3,8 @@
    and one scrolling work area. Drawers slide in from the right for details. */
 :root {
   --bg: #f1eee7; --surface: #fffdf9; --surface-2: #f7f3ea; --ink: #17150f; --muted: #6b6558; --line: #e2dccf;
-  --side: #0f0e0c; --side-2: #1b1915; --side-text: #d9d2c3; --side-muted: #8d8574;
-  --gold: #c9a24a; --gold-hi: #e3c47a; --gold-text: #8a6a1f; --gold-soft: #f4ead2; --on-gold: #17130a;
+  --side: #050505; --side-2: #161513; --side-text: #d9d2c3; --side-muted: #8d8574;
+  --gold: #d2b46a; --gold-hi: #efe2a2; --gold-text: #8a6a2b; --gold-grad: linear-gradient(180deg, #f4eab0 0%, #d8bd74 38%, #a07c38 72%, #d9c07c 100%); --gold-soft: #f4ead2; --on-gold: #17130a;
   --good: #2b7a4b; --good-soft: #e0f0e6; --warn: #9a6300; --warn-soft: #fbefd6; --bad: #b0372b; --bad-soft: #f8e1de; --info: #2c5a94; --info-soft: #e1eaf6;
   --open: #fffdf9; --closed: #ece7dc;
   --shadow: 0 1px 2px rgb(30 24 10 / 5%), 0 8px 24px rgb(30 24 10 / 7%);
@@ -46,8 +46,8 @@ button { font: inherit; color: inherit; }
 .btn:hover { border-color: var(--gold); }
 .btn:active { transform: scale(.98); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
-.btn.gold { background: var(--gold); border-color: var(--gold); color: var(--on-gold); }
-.btn.gold:hover { background: var(--gold-hi); border-color: var(--gold-hi); }
+.btn.gold { background: var(--gold-grad); background-size: 100% 140%; border-color: #b8964f; color: var(--on-gold); box-shadow: inset 0 1px 0 rgb(255 255 255 / 35%); transition: background-position .4s var(--ease); }
+.btn.gold:hover { background-position: 50% 100%; border-color: #b8964f; }
 .btn.dark { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover { background: var(--surface-2); border-color: var(--line); }
@@ -60,7 +60,7 @@ button { font: inherit; color: inherit; }
 .icon-btn:hover { border-color: var(--gold); }
 .f { display: grid; gap: 5px; font-size: .82rem; font-weight: 600; color: var(--muted); min-width: 0; }
 .f input, .f select, .f textarea, input.inp, select.inp { font: 400 .95rem/1.3 var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; min-width: 0; transition: border-color .15s, box-shadow .15s; }
-.f input:focus, .f select:focus, .f textarea:focus, .inp:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgb(201 162 74 / 20%); }
+.f input:focus, .f select:focus, .f textarea:focus, .inp:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgb(210 180 106 / 22%); }
 .f textarea { min-height: 80px; resize: vertical; }
 .f .hint { font-weight: 400; font-size: .78rem; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
@@ -197,7 +197,7 @@ button { font: inherit; color: inherit; }
 .appt { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); transition: border-color .15s, transform .15s var(--ease), box-shadow .15s; cursor: pointer; position: relative; }
 .appt:hover { border-color: var(--gold); box-shadow: var(--shadow); }
 .appt.past { opacity: .62; }
-.appt.now { border-color: var(--gold); box-shadow: 0 0 0 3px rgb(201 162 74 / 18%); }
+.appt.now { border-color: var(--gold); box-shadow: 0 0 0 3px rgb(210 180 106 / 18%); }
 .appt .tm { font: 400 1.5rem/1 var(--display); letter-spacing: .02em; }
 .appt .tm small { display: block; font: 500 .74rem/1.4 var(--body); color: var(--muted); letter-spacing: 0; }
 .appt .who { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -376,3 +376,11 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
   .pole-mini { animation: none !important; }
 }
+
+
+/* ---------- Lopez Cuts logo ---------- */
+.auth-logo { width: 150px; height: auto; display: block; }
+.auth-brand { justify-content: space-between; }
+.side-logo { height: 34px; width: auto; display: block; }
+.side-word { font: 700 1.15rem/1 'Cinzel', Georgia, serif; letter-spacing: .06em; background: var(--gold-grad); -webkit-background-clip: text; background-clip: text; color: transparent; white-space: nowrap; }
+.avatar { background: var(--gold-grad); }

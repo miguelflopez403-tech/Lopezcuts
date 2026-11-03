@@ -2,12 +2,15 @@
    Layout: a night-shop hero (barber pole + live "next opening" ticket), then
    alternating paper / ink bands; booking happens in a sheet over the page. */
 :root {
-  --ink: #0f0e0c;          /* shop at night */
-  --ink-2: #1a1814;
-  --ink-3: #26231d;
-  --gold: #c9a24a;         /* brand gold */
-  --gold-hi: #e3c47a;
-  --gold-deep: #8f6f22;    /* gold text on paper */
+  --ink: #050505;          /* logo black */
+  --ink-2: #111110;
+  --ink-3: #1c1b18;
+  --gold: #d2b46a;         /* logo gold */
+  --gold-hi: #efe2a2;
+  --gold-deep: #8a6a2b;    /* gold text on paper */
+  /* The logo's metallic gold, light at the top, deep in the middle */
+  --gold-grad: linear-gradient(180deg, #f4eab0 0%, #d8bd74 38%, #a07c38 72%, #d9c07c 100%);
+  --gold-sheen: linear-gradient(100deg, #9a7634 0%, #d6bb72 30%, #f6eebc 46%, #d6bb72 62%, #9a7634 100%);
   --paper: #f5f1e9;        /* brand paper */
   --paper-2: #ebe5d8;
   --card: #fffdf8;
@@ -17,8 +20,6 @@
   --on-ink: #f3efe6;
   --on-ink-muted: #aaa293;
   --line-ink: #34302a;
-  --pole-red: #b8322a;
-  --pole-blue: #24508f;
   --good: #2f7d4f;
   --bad: #b23a2c;
   --shadow: 0 1px 2px rgb(30 24 10 / 6%), 0 10px 30px rgb(30 24 10 / 8%);
@@ -79,8 +80,8 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .btn.sm { padding: .65em 1.1em; font-size: .875rem; }
 .btn.lg { padding: 1.05em 1.6em; font-size: 1rem; }
 .btn.block { width: 100%; }
-.btn.gold { --bg: var(--gold); --fg: #17130a; box-shadow: 0 8px 24px -10px rgb(201 162 74 / 70%); }
-.btn.gold:hover { --bg: var(--gold-hi); }
+.btn.gold { --bg: var(--gold); --fg: #17130a; background-image: var(--gold-grad); background-size: 100% 140%; background-position: 50% 0; box-shadow: 0 8px 24px -10px rgb(210 180 106 / 70%), inset 0 1px 0 rgb(255 255 255 / 35%); transition: background-position .4s var(--ease), transform .15s, box-shadow .2s; }
+.btn.gold:hover { background-position: 50% 100%; }
 .btn.ink { --bg: var(--ink); --fg: var(--on-ink); }
 .btn.ink:hover { --bg: var(--ink-3); }
 .btn.ghost { --bg: transparent; --fg: var(--on-ink); border-color: rgb(243 239 230 / 28%); }
@@ -94,10 +95,10 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .link-btn:hover { text-decoration-color: currentColor; }
 
 /* ---------- Nav ---------- */
-.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: rgb(15 14 12 / 82%); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid transparent; transition: border-color .3s, background-color .3s; color: var(--on-ink); }
-.nav.scrolled { border-bottom-color: var(--line-ink); background: rgb(15 14 12 / 94%); }
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; background: rgb(5 5 5 / 97%); backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid transparent; transition: border-color .3s, background-color .3s; color: var(--on-ink); }
+.nav.scrolled { border-bottom-color: var(--line-ink); background: rgb(5 5 5 / 94%); }
 .nav-row { display: flex; align-items: center; gap: 24px; height: 64px; }
-.brand { display: inline-flex; align-items: center; gap: 10px; font: 400 1.9rem/1 var(--display); letter-spacing: .04em; color: var(--on-ink); text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font: 700 1.28rem/1 'Cinzel', Georgia, serif; letter-spacing: .06em; color: var(--gold); text-decoration: none; }
 .brand b { color: var(--gold); font-weight: 400; }
 .brand-mark { width: 9px; height: 26px; border-radius: 5px; background: repeating-linear-gradient(135deg, var(--pole-red) 0 6px, #f4f0e6 6px 12px, var(--pole-blue) 12px 18px, #f4f0e6 18px 24px); background-size: 100% 34px; animation: pole 1.6s linear infinite; }
 .nav-links { display: flex; gap: 4px; margin-left: auto; }
@@ -109,11 +110,11 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .hero { position: relative; background: var(--ink); color: var(--on-ink); overflow: hidden; isolation: isolate; }
 .hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
   radial-gradient(900px 500px at 85% 20%, rgb(201 162 74 / 16%), transparent 60%),
-  radial-gradient(700px 400px at 0% 100%, rgb(36 80 143 / 12%), transparent 60%); }
+  radial-gradient(700px 400px at 0% 100%, rgb(210 180 106 / 7%), transparent 60%); }
 .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .35; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .9fr); gap: clamp(32px, 6vw, 80px); align-items: center; padding-block: clamp(56px, 9vw, 112px) clamp(48px, 7vw, 88px); }
 .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: .78rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-hi); }
-.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px rgb(201 162 74 / 18%); }
+.eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px rgb(210 180 106 / 18%); }
 .hero-title { font-size: clamp(4rem, 12.5vw, 9.5rem); line-height: .86; margin: 18px 0 22px; letter-spacing: .01em; }
 .hero-title .line { display: block; }
 .hero-title .line > span { display: inline-block; }
@@ -131,7 +132,7 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .pole-cap.bottom { border-radius: 6px 6px 14px 14px; }
 .pole-glass { position: relative; width: 44px; flex: 1; overflow: hidden; border-radius: 3px; background: #f4f0e6; box-shadow: inset 6px 0 10px rgb(0 0 0 / 25%), inset -8px 0 12px rgb(0 0 0 / 30%); }
 .pole-glass::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgb(0 0 0 / 22%), rgb(255 255 255 / 45%) 30%, transparent 50%, rgb(0 0 0 / 28%)); }
-.pole-stripes { position: absolute; inset: -60px 0 0; background: repeating-linear-gradient(150deg, var(--pole-red) 0 14px, #f4f0e6 14px 28px, var(--pole-blue) 28px 42px, #f4f0e6 42px 56px); background-size: 100% 64.7px; animation: pole 2.4s linear infinite; }
+.pole-stripes { position: absolute; inset: -60px 0 0; background: repeating-linear-gradient(150deg, #d8bd74 0 14px, #0b0b0a 14px 28px, #f1e6ab 28px 42px, #0b0b0a 42px 56px); background-size: 100% 64.7px; animation: pole 2.4s linear infinite; }
 @keyframes pole { to { background-position: 0 64.7px; } }
 .brand-mark { background-size: 100% 27.7px; }
 
@@ -269,7 +270,7 @@ section[id], footer[id] { scroll-margin-top: 72px; }
 .updates h3 { font-size: 1.7rem; }
 @media (max-width: 900px) { .updates { grid-template-columns: 1fr; } }
 
-.gold-band { background: var(--gold); color: #17130a; padding-block: clamp(48px, 7vw, 80px); }
+.gold-band { background: var(--gold-sheen); background-size: 200% 100%; animation: sheen 9s ease-in-out infinite; color: #17130a; padding-block: clamp(48px, 7vw, 80px); }
 .cta-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
 .cta-row h2 { font-size: clamp(2.2rem, 5vw, 3.6rem); }
 
@@ -437,3 +438,21 @@ dialog::backdrop { background: rgb(8 7 6 / 62%); backdrop-filter: blur(4px); }
 }
 
 @media (max-width: 420px) { #nav .nav-row .btn.sm { padding: .6em .8em; font-size: .82rem; } #nav .brand-word { font-size: .92em; } }
+
+
+/* ---------- Logo + metallic gold (matches the Lopez Cuts logo) ---------- */
+.brand-logo { height: 34px; width: auto; display: block; }
+.brand-word { background: var(--gold-grad); -webkit-background-clip: text; background-clip: text; color: transparent; white-space: nowrap; }
+.foot-logo { display: inline-block; }
+.foot-logo img { width: min(240px, 70vw); height: auto; display: block; }
+.hero-title .gold > span, .big, .hero-facts b, .stat-n {
+  background: var(--gold-sheen); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sheen 6s ease-in-out infinite;
+}
+.hero-title .gold > span { animation: rise .9s var(--ease) both, sheen 6s ease-in-out 1s infinite; }
+@keyframes sheen { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
+.step-n { background: var(--gold-grad); }
+.pole-glass { background: #0b0b0a; }
+.pole-cap { background: linear-gradient(90deg, #6e5426, #f1e3a3 40%, #a8843c 75%, #4d3b19); }
+@media (max-width: 420px) { .brand-logo { height: 28px; } .brand { font-size: 1.05rem; } }
+@media (prefers-reduced-motion: reduce) { .gold-band, .hero-title .gold > span, .big, .hero-facts b, .stat-n { animation: none; } }
