@@ -215,7 +215,9 @@
   const mins = a => Math.round((new Date(a.ends_at) - new Date(a.starts_at)) / 6e4);
   const statusLabel = { booked: 'Booked', confirmed: 'Confirmed', completed: 'Done', no_show: 'No-show', cancelled: 'Cancelled' };
   const pill = st => h('span', { class: 'pill ' + st }, statusLabel[st] || st);
-  const siteBase = () => LC.mode === 'live' && LC.config.siteUrl ? LC.config.siteUrl.replace(/\/$/, '') + '/' : new URL('../', location.href).href;
+  // Links in texts use whatever address the dashboard is opened on, so they work on
+  // lopezcuts.vercel.app now and switch to lopezcuts.com automatically once it is connected.
+  const siteBase = () => new URL('../', location.href).href;
   const manageUrl = tok => siteBase() + '#manage-' + tok;
   const smsHref = (phone, body) => { const d = String(phone || '').replace(/\D/g, ''); return d ? `sms:+${d.length === 10 ? '1' + d : d}${body ? '?&body=' + encodeURIComponent(body) : ''}` : null; };
   const monthKey = d => T.day(d).slice(0, 7);
