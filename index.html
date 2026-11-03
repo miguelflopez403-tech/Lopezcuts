@@ -109,6 +109,9 @@
  }
 }
 </script>
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How much is a haircut?", "acceptedAnswer": {"@type": "Answer", "text": "$25 for your first cut and $30 after that. Add a beard or design for +$5. Touch-ups are $0."}}, {"@type": "Question", "name": "How long does a cut take?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 40 minutes, so you can fit it between classes or before work."}}, {"@type": "Question", "name": "Where are you located?", "acceptedAnswer": {"@type": "Answer", "text": "Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private."}}, {"@type": "Question", "name": "Do I need an app or an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. Book right on this site in about a minute with your name and phone number."}}, {"@type": "Question", "name": "How far ahead can I book?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 3 months ahead, and as late as 12 hours before an open time."}}, {"@type": "Question", "name": "Can I cancel or reschedule?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Use your booking link up to 6 hours before your appointment. Closer than that, just reply to Miguel’s text."}}, {"@type": "Question", "name": "What if something’s off after my cut?", "acceptedAnswer": {"@type": "Answer", "text": "Reach out and come back in. Touch-ups are free, especially for curly hair."}}, {"@type": "Question", "name": "What styles do you do?", "acceptedAnswer": {"@type": "Answer", "text": "Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "You pay at your appointment, after your cut."}}]}
+</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#050505">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
@@ -147,6 +150,7 @@
       <a href="#work">Portfolio</a>
       <a href="#story">Story</a>
       <a href="#reviews">Reviews</a>
+      <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
     </nav>
     <div style="display:flex;gap:8px;align-items:center">
@@ -219,7 +223,7 @@
             <div><span class="big">$25</span><span class="cap">First-time clients</span></div>
             <div><span class="big">$30</span><span class="cap">Returning clients</span></div>
           </div>
-          <button class="btn gold block" type="button" data-book>Book a haircut</button>
+          <button class="btn gold block" type="button" data-book>Book your cut</button>
         </article>
         <article class="price-card" data-reveal>
           <div class="pc-head"><h3>Add-ons</h3><span class="tag">Any haircut</span></div>
@@ -246,20 +250,69 @@
     </div>
   </section>
 
+  <!-- FIND YOUR FIT -->
+  <section class="band" id="fit">
+    <div class="wrap">
+      <div class="sec-head" data-reveal>
+        <div>
+          <p class="kicker">Find your fit</p>
+          <h2>Which one <span class="gold">are you?</span></h2>
+        </div>
+      </div>
+      <div class="fit-grid">
+        <article class="fit-card" data-reveal>
+          <p class="fit-n">01</p>
+          <h3>First cut with me</h3>
+          <p class="fit-price">$25</p>
+          <ul><li>First-time price, no catch</li><li>Show a photo or describe the look</li><li>Not right? Touch-ups are $0</li></ul>
+          <button class="btn ghost-dark sm" type="button" data-book>Book my first cut</button>
+        </article>
+        <article class="fit-card" data-reveal>
+          <p class="fit-n">02</p>
+          <h3>Regulars</h3>
+          <p class="fit-price">$30</p>
+          <ul><li>Book your usual in under a minute</li><li>Rebook from your booking link</li><li>Every 3–4 weeks keeps it sharp</li></ul>
+          <button class="btn ghost-dark sm" type="button" data-book>Book my usual</button>
+        </article>
+        <article class="fit-card" data-reveal>
+          <p class="fit-n">03</p>
+          <h3>Students</h3>
+          <p class="fit-price">$25 first cut</p>
+          <ul><li>Times that work around classes</li><li>No app or account needed</li><li>Send a friend: their first cut is $25</li></ul>
+          <button class="btn ghost-dark sm" type="button" data-book>Find a time</button>
+        </article>
+        <article class="fit-card" data-reveal>
+          <p class="fit-n">04</p>
+          <h3>Need it this week</h3>
+          <p class="fit-price">Live</p>
+          <ul><li>Next opening shows live up top</li><li>Book as little as 12 hours ahead</li><li>Confirmation text the day of</li></ul>
+          <button class="btn ghost-dark sm" type="button" data-book>See open times</button>
+        </article>
+        <article class="fit-card" data-reveal>
+          <p class="fit-n">05</p>
+          <h3>Back home in the DMV</h3>
+          <p class="fit-price">$25</p>
+          <ul><li>Hometown cuts when Miguel is in town</li><li>DC, Maryland and Virginia</li><li>DM @lopezcuts.dmv to get on the list</li></ul>
+          <button class="btn ghost-dark sm" type="button" data-book data-home>Book a hometown cut</button>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <!-- PROCESS -->
   <section class="band ink" id="process">
     <div class="wrap">
       <div class="sec-head" data-reveal>
         <div>
-          <p class="kicker">How a visit works</p>
-          <h2>From “you free?” to <span class="gold">fresh cut.</span></h2>
+          <p class="kicker">From “you free?” to fresh cut</p>
+          <h2>How it <span class="gold">works.</span></h2>
         </div>
       </div>
       <ol class="steps">
-        <li data-reveal><span class="step-n">1</span><h3>Book right here</h3><p>Pick your service and an open time. It takes about a minute, no app or account needed.</p></li>
-        <li data-reveal><span class="step-n">2</span><h3>Get confirmed</h3><p>The morning of your appointment, Miguel texts you to confirm your time and send the address. Tap your booking link to confirm.</p></li>
-        <li data-reveal><span class="step-n">3</span><h3>Get your cut</h3><p>Show up, talk through the style you want, and sit back. Cuts take up to 40 minutes.</p></li>
-        <li data-reveal><span class="step-n">4</span><h3>Pay &amp; rebook</h3><p>$25 for your first cut, $30 after, +$5 for a beard or design. Rebook from the same page for next time.</p></li>
+        <li data-reveal><span class="step-n">01</span><h3>Book right here</h3><p>Pick your service and an open time. It takes about a minute, no app or account needed.</p></li>
+        <li data-reveal><span class="step-n">02</span><h3>Get confirmed</h3><p>You get a confirmation right away, and Miguel texts you the day of your appointment with the address.</p></li>
+        <li data-reveal><span class="step-n">03</span><h3>Get your cut</h3><p>Show up, talk through the style you want, and sit back. Cuts take up to 40 minutes.</p></li>
+        <li data-reveal><span class="step-n">04</span><h3>Pay &amp; rebook</h3><p>$25 for your first cut, $30 after, +$5 for a beard or design. Rebook from the same page for next time.</p></li>
       </ol>
     </div>
   </section>
@@ -322,6 +375,30 @@
         <button class="btn ghost-dark" type="button" id="moreReviews" hidden>See all reviews</button>
       </div>
       <p class="center muted small">Had a cut with me? Tap Leave a review, or use the link in your text from Miguel. Got feedback just for me? Email <a class="link" href="mailto:miguel@lopezcuts.com">miguel@lopezcuts.com</a>.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="band paper" id="faq">
+    <div class="wrap faq-wrap">
+      <div class="sec-head" data-reveal>
+        <div>
+          <p class="kicker">Questions</p>
+          <h2>Good to <span class="gold">know.</span></h2>
+        </div>
+      </div>
+      <div class="faq">
+        <details class="faq-item" data-reveal><summary>How much is a haircut?</summary><p>$25 for your first cut and $30 after that. Add a beard or design for +$5. Touch-ups are $0.</p></details>
+        <details class="faq-item" data-reveal><summary>How long does a cut take?</summary><p>Up to 40 minutes, so you can fit it between classes or before work.</p></details>
+        <details class="faq-item" data-reveal><summary>Where are you located?</summary><p>Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private.</p></details>
+        <details class="faq-item" data-reveal><summary>Do I need an app or an account?</summary><p>No. Book right on this site in about a minute with your name and phone number.</p></details>
+        <details class="faq-item" data-reveal><summary>How far ahead can I book?</summary><p>Up to 3 months ahead, and as late as 12 hours before an open time.</p></details>
+        <details class="faq-item" data-reveal><summary>Can I cancel or reschedule?</summary><p>Yes. Use your booking link up to 6 hours before your appointment. Closer than that, just reply to Miguel’s text.</p></details>
+        <details class="faq-item" data-reveal><summary>What if something’s off after my cut?</summary><p>Reach out and come back in. Touch-ups are free, especially for curly hair.</p></details>
+        <details class="faq-item" data-reveal><summary>What styles do you do?</summary><p>Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one.</p></details>
+        <details class="faq-item" data-reveal><summary>How do I pay?</summary><p>You pay at your appointment, after your cut.</p></details>
+      </div>
+      <div class="center" style="margin-top:26px"><button class="btn gold" type="button" data-book>Book your cut</button></div>
     </div>
   </section>
 

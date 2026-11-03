@@ -182,6 +182,7 @@
     if (home) {
       const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · ${home.duration_min} min`;
       const hb = $('#homeBook'); if (hb) { hb.dataset.svc = home.id; hb.textContent = 'Book a hometown cut'; }
+      $$('[data-home]').forEach(x => { x.dataset.svc = home.id; });
     }
     const adds = state.services.filter(s => s.is_addon && s.active);
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
@@ -231,7 +232,7 @@
     sheet.showModal(); render();
     if (opts.day && opts.slot) go(1);
   }
-  $$('[data-book]').forEach(b => b.addEventListener('click', e => { if (b.id === 'homeBook' && !b.dataset.svc) return; e.preventDefault(); openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : b.dataset.svc ? { serviceId: b.dataset.svc } : {}); }));
+  $$('[data-book]').forEach(b => b.addEventListener('click', e => { if (b.id === 'homeBook' && !b.dataset.svc) return; if ('home' in b.dataset && !b.dataset.svc) { e.preventDefault(); document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' }); return; } e.preventDefault(); openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : b.dataset.svc ? { serviceId: b.dataset.svc } : {}); }));
   $('#sheetClose').addEventListener('click', () => sheet.close());
   sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });
   sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-')) history.replaceState(null, '', location.pathname + location.search); });
