@@ -4,4 +4,6 @@ alter table public.settings add column if not exists notify_email   text not nul
 alter table public.settings add column if not exists email_bookings boolean not null default true;
 alter table public.settings add column if not exists email_cancels  boolean not null default true;
 
+notify pgrst, 'reload schema';
+
 select notify_email, email_bookings, email_cancels from public.settings where id = 1;  -- should show your email, true, true
