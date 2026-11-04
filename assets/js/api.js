@@ -85,6 +85,11 @@
     return {
       mode: 'live', ready,
       async rpc(name, args) { await ready; return q(sb.rpc(name, args || {})); },
+      async fn(name, body) {
+        await ready; const { data, error } = await sb.functions.invoke(name, { body: body || {} });
+        if (error) { let m = ''; try { m = (await error.context.json()).error; } catch { } throw new ApiError(m || `Couldn't reach ${name}. Is that function deployed in Supabase?`); }
+        return data;
+      },
       async list(table, o = {}) {
         await ready; const out = []; const page = 1000;
         for (let from = 0; ; from += page) {
@@ -445,6 +450,7 @@
     return {
       mode: 'demo', ready: Promise.resolve(),
       async rpc(name, args) { await tick(); if (!RPC[name]) throw new ApiError('Unknown action ' + name); return clone(RPC[name](args || {})); },
+      async fn() { await tick(); throw new ApiError('Phone notifications only work on the live site, not in this preview.'); },
       async list(table, o = {}) {
         await tick(); guard(table, 'select');
         let rows = visible(table, db[table] || []);
