@@ -1233,7 +1233,7 @@
       else if (mine && Notification.permission === 'granted') put(
         h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ' This device gets notifications.'),
         tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A client cancels'),
-        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check your phone.' : 'No phones got it. Try turning it off and on.'); } }, 'Send a test'),
+        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check this device in a few seconds.' : !r.devices ? 'This device isn\'t saved yet. Turn it off and on again.' : 'Not sent: ' + ((r.errors || [])[0] || 'unknown error')); } }, 'Send a test'),
           h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this device')));
       else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);
         put(h('p', {}, 'Get a notification on this device every time someone books with you.'), b,

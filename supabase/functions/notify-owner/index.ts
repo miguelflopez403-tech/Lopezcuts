@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     if (payload.action === 'test') {
       const { data: subs } = await sb.from('push_subscriptions').select('*').eq('user_id', u.user.id);
       const sent = await sendAll(sb, subs ?? [], { title: 'Lopezcuts', body: 'Notifications are on. You\'ll get one every time someone books.', url: '/owner', tag: 'test' });
-      return json({ sent, devices: (subs ?? []).length });
+      return json({ sent, devices: (subs ?? []).length, errors: lastErrors });
     }
     if (payload.action === 'test-email') {
       const { data: st } = await sb.from('settings').select('notify_email').eq('id', 1).maybeSingle();
@@ -117,13 +117,15 @@ Deno.serve(async (req) => {
   return json({ kind, sent, devices: want.length, emailed });
 });
 
+const lastErrors: string[] = [];
 async function sendAll(sb: any, subs: any[], msg: Record<string, string>) {
-  let sent = 0;
+  let sent = 0; lastErrors.length = 0;
   for (const s of subs) {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(msg), { TTL: 3600, urgency: 'high' });
       sent++; await sb.from('push_subscriptions').update({ last_ok_at: new Date().toISOString() }).eq('id', s.id);
     } catch (e: any) {
+      lastErrors.push(`${e?.statusCode ?? ''} ${String(e?.body || e?.message || e).slice(0, 160)}`.trim());
       // the phone turned notifications off or the app was removed
       if (e?.statusCode === 404 || e?.statusCode === 410) await sb.from('push_subscriptions').delete().eq('id', s.id);
     }
