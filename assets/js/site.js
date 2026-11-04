@@ -4,6 +4,10 @@
   const { T, money, fmtPhone } = LC;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // Years of experience: started in 2022, goes up by one every January 1st (Salt Lake time).
+  const STARTED = 2022;
+  const yearsCutting = (+new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', year: 'numeric' }).format(new Date())) - STARTED;
+  $$('[data-years]').forEach(el => { if ('count' in el.dataset) { el.dataset.count = yearsCutting; el.textContent = yearsCutting + (el.dataset.suffix || ''); } else el.textContent = yearsCutting; });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function h(tag, attrs, ...kids) {
     const e = document.createElement(tag);
