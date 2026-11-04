@@ -1252,9 +1252,9 @@
       else if (!can) put(h('p', { class: 'hint' }, 'This browser can\'t show notifications. On iPhone, update to iOS 16.4 or newer and use the Home Screen app.'));
       else if (mine && Notification.permission === 'granted') put(
         h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ' This device gets notifications.'),
-        tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A client cancels'),
+        tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A cancel or reschedule (yours or the client\'s)'),
         tog(mine, 'notify_manual', 'I book someone myself'), tog(mine, 'notify_confirms', 'An appointment gets confirmed'),
-        h('p', { class: 'hint' }, 'The last two only come to your devices, never by email.'),
+        h('p', { class: 'hint' }, 'Only client bookings and client cancels are also emailed. Everything else is device-only.'),
         h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check this device in a few seconds.' : !r.devices ? 'This device isn\'t saved yet. Turn it off and on again.' : 'Not sent: ' + ((r.errors || [])[0] || 'unknown error')); } }, 'Send a test'),
           h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this device')));
       else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);

@@ -90,12 +90,14 @@ Deno.serve(async (req) => {
   let kind = '';
   if (payload.type === 'INSERT' && a.source === 'online' && fresh(a.created_at)) kind = 'booked';
   else if (payload.type === 'INSERT' && a.source !== 'walk_in' && fresh(a.created_at)) kind = 'manual';
-  else if (payload.type === 'UPDATE' && a.status === 'cancelled' && a.cancelled_by === 'client' && fresh(a.cancelled_at)) kind = 'cancelled';
+  else if (payload.type === 'UPDATE' && a.status === 'cancelled' && payload.old_record?.status !== 'cancelled' && fresh(a.cancelled_at)) kind = 'cancelled';
+  else if (payload.type === 'UPDATE' && ['booked', 'confirmed'].includes(a.status) && payload.old_record?.starts_at && new Date(payload.old_record.starts_at).getTime() !== new Date(a.starts_at).getTime() && new Date(payload.record?.starts_at).getTime() === new Date(a.starts_at).getTime()) kind = 'moved';
   else if (payload.type === 'UPDATE' && a.status === 'confirmed' && payload.old_record?.status !== 'confirmed' && fresh(a.confirmed_at)) kind = 'confirmed';
   if (!kind) return json({ skipped: 'nothing to notify' });
 
   // once per appointment per kind
-  const { error: dup } = await sb.from('push_sent').insert({ appointment_id: a.id, kind });
+  // a booking can be moved more than once, so each new time counts as its own event
+  const { error: dup } = await sb.from('push_sent').insert({ appointment_id: a.id, kind: kind === 'moved' ? 'moved ' + a.starts_at : kind });
   if (dup) return json({ skipped: 'already notified' });
 
   const [{ data: st }, { data: c }, { data: svc }] = await Promise.all([
@@ -103,16 +105,19 @@ Deno.serve(async (req) => {
     sb.from('clients').select('full_name').eq('id', a.client_id).maybeSingle(),
     sb.from('services').select('name').eq('id', a.service_id).maybeSingle(),
   ]);
-  const when = new Date(a.starts_at).toLocaleString('en-US', { timeZone: st?.timezone || 'America/Denver', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const fmt = (t: string) => new Date(t).toLocaleString('en-US', { timeZone: st?.timezone || 'America/Denver', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const when = fmt(a.starts_at);
+  const byClient = a.cancelled_by === 'client';
   const name = c?.full_name || 'A client';
   const price = a.price != null ? ` · $${Number(a.price).toFixed(0)}` : '';
   const msg = ({
     booked: { title: `New booking: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}${price}`, url: '/owner#calendar', tag: 'appt-' + a.id },
     manual: { title: `Booked: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}${price} · tap to confirm it`, url: '/owner#schedule', tag: 'appt-' + a.id },
     confirmed: { title: `Confirmed: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}`, url: '/owner#schedule', tag: 'appt-' + a.id },
-    cancelled: { title: `Cancelled: ${name}`, body: `${when} is open again${a.cancel_reason ? ` · "${String(a.cancel_reason).slice(0, 80)}"` : ''}`, url: '/owner#calendar', tag: 'appt-' + a.id },
+    cancelled: { title: byClient ? `Cancelled: ${name}` : `You cancelled ${name}`, body: `${when} is open again${a.cancel_reason ? ` · "${String(a.cancel_reason).slice(0, 80)}"` : ''}`, url: '/owner#calendar', tag: 'appt-' + a.id },
+    moved: { title: `Rescheduled: ${name}`, body: `${payload.old_record?.starts_at ? fmt(payload.old_record.starts_at) + ' → ' : ''}${when}`, url: '/owner#schedule', tag: 'appt-' + a.id },
   } as Record<string, Record<string, string>>)[kind];
-  const pref: Record<string, string> = { booked: 'notify_bookings', manual: 'notify_manual', confirmed: 'notify_confirms', cancelled: 'notify_cancels' };
+  const pref: Record<string, string> = { booked: 'notify_bookings', manual: 'notify_manual', confirmed: 'notify_confirms', cancelled: 'notify_cancels', moved: 'notify_cancels' };
 
   // who gets it: owner/manager see everything, employees only their own chair
   const { data: subs } = await sb.from('push_subscriptions').select('*, profiles!inner(role, staff_id, active)').eq('profiles.active', true);
@@ -120,7 +125,7 @@ Deno.serve(async (req) => {
     && (s.profiles.role !== 'employee' || s.profiles.staff_id === a.staff_id));
   const sent = await sendAll(sb, want, msg);
   // email only for client bookings and cancellations; your own bookings and confirmations are phone-only
-  const emailOn = kind === 'booked' ? st?.email_bookings : kind === 'cancelled' ? st?.email_cancels : false;
+  const emailOn = kind === 'booked' ? st?.email_bookings : kind === 'cancelled' && byClient ? st?.email_cancels : false;
   const emailed = emailOn !== false ? await sendEmail(st?.notify_email, msg, req) : 'off';
   return json({ kind, sent, devices: want.length, emailed });
 });
