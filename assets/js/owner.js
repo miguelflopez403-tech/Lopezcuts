@@ -1253,6 +1253,8 @@
       else if (mine && Notification.permission === 'granted') put(
         h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ' This device gets notifications.'),
         tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A client cancels'),
+        tog(mine, 'notify_manual', 'I book someone myself'), tog(mine, 'notify_confirms', 'An appointment gets confirmed'),
+        h('p', { class: 'hint' }, 'The last two only come to your devices, never by email.'),
         h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check this device in a few seconds.' : !r.devices ? 'This device isn\'t saved yet. Turn it off and on again.' : 'Not sent: ' + ((r.errors || [])[0] || 'unknown error')); } }, 'Send a test'),
           h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this device')));
       else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);
@@ -1266,7 +1268,7 @@
     paint();
     return h('div', { class: 'grid2' },
       h('section', { class: 'card stack' }, h('h2', {}, 'Notifications'), status),
-      h('section', { class: 'card stack' }, h('h2', {}, 'Your devices'), h('p', { class: 'hint' }, 'Turn notifications on from each phone or computer you use. You only get alerts for bookings online, not ones you add yourself.'), devices),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Your devices'), h('p', { class: 'hint' }, 'Turn notifications on from each phone or computer you use.'), devices),
       isAdmin() ? emailCard() : null);
   }
   function emailCard() {

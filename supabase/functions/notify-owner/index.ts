@@ -89,7 +89,9 @@ Deno.serve(async (req) => {
   const fresh = (t: string | null) => !!t && Date.now() - new Date(t).getTime() < 15 * 60e3;
   let kind = '';
   if (payload.type === 'INSERT' && a.source === 'online' && fresh(a.created_at)) kind = 'booked';
+  else if (payload.type === 'INSERT' && a.source !== 'walk_in' && fresh(a.created_at)) kind = 'manual';
   else if (payload.type === 'UPDATE' && a.status === 'cancelled' && a.cancelled_by === 'client' && fresh(a.cancelled_at)) kind = 'cancelled';
+  else if (payload.type === 'UPDATE' && a.status === 'confirmed' && payload.old_record?.status !== 'confirmed' && fresh(a.confirmed_at)) kind = 'confirmed';
   if (!kind) return json({ skipped: 'nothing to notify' });
 
   // once per appointment per kind
@@ -103,17 +105,23 @@ Deno.serve(async (req) => {
   ]);
   const when = new Date(a.starts_at).toLocaleString('en-US', { timeZone: st?.timezone || 'America/Denver', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const name = c?.full_name || 'A client';
-  const msg = kind === 'booked'
-    ? { title: `New booking: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}${a.price != null ? ` · $${Number(a.price).toFixed(0)}` : ''}`, url: '/owner#calendar', tag: 'appt-' + a.id }
-    : { title: `Cancelled: ${name}`, body: `${when} is open again${a.cancel_reason ? ` · "${String(a.cancel_reason).slice(0, 80)}"` : ''}`, url: '/owner#calendar', tag: 'appt-' + a.id };
+  const price = a.price != null ? ` · $${Number(a.price).toFixed(0)}` : '';
+  const msg = ({
+    booked: { title: `New booking: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}${price}`, url: '/owner#calendar', tag: 'appt-' + a.id },
+    manual: { title: `Booked: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}${price} · tap to confirm it`, url: '/owner#schedule', tag: 'appt-' + a.id },
+    confirmed: { title: `Confirmed: ${name}`, body: `${svc?.name ?? 'Haircut'} · ${when}`, url: '/owner#schedule', tag: 'appt-' + a.id },
+    cancelled: { title: `Cancelled: ${name}`, body: `${when} is open again${a.cancel_reason ? ` · "${String(a.cancel_reason).slice(0, 80)}"` : ''}`, url: '/owner#calendar', tag: 'appt-' + a.id },
+  } as Record<string, Record<string, string>>)[kind];
+  const pref: Record<string, string> = { booked: 'notify_bookings', manual: 'notify_manual', confirmed: 'notify_confirms', cancelled: 'notify_cancels' };
 
   // who gets it: owner/manager see everything, employees only their own chair
   const { data: subs } = await sb.from('push_subscriptions').select('*, profiles!inner(role, staff_id, active)').eq('profiles.active', true);
-  const want = (subs ?? []).filter((s: any) => (kind === 'booked' ? s.notify_bookings : s.notify_cancels)
+  const want = (subs ?? []).filter((s: any) => s[pref[kind]] !== false
     && (s.profiles.role !== 'employee' || s.profiles.staff_id === a.staff_id));
   const sent = await sendAll(sb, want, msg);
-  const emailed = (kind === 'booked' ? st?.email_bookings : st?.email_cancels) !== false
-    ? await sendEmail(st?.notify_email, msg, req) : 'off';
+  // email only for client bookings and cancellations; your own bookings and confirmations are phone-only
+  const emailOn = kind === 'booked' ? st?.email_bookings : kind === 'cancelled' ? st?.email_cancels : false;
+  const emailed = emailOn !== false ? await sendEmail(st?.notify_email, msg, req) : 'off';
   return json({ kind, sent, devices: want.length, emailed });
 });
 

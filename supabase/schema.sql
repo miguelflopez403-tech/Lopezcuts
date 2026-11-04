@@ -1299,3 +1299,8 @@ language sql stable security definer set search_path = public as $$
   ) and not public.ip_locked();
 $$;
 
+
+-- ---------- Phone-only alerts: own bookings + confirmations ----------
+alter table public.push_subscriptions add column if not exists notify_manual   boolean not null default true;
+alter table public.push_subscriptions add column if not exists notify_confirms boolean not null default true;
+grant update (notify_bookings, notify_cancels, notify_manual, notify_confirms, device) on public.push_subscriptions to authenticated;
