@@ -277,6 +277,7 @@
   // When nothing is open, every booking button says Fully booked and can't be tapped.
   function setFull(on) {
     state.full = on; document.body.classList.toggle('is-full', on);
+    const st = $('#seeTimes'); if (st) st.hidden = on;  // only shown when there are open times
     $$('[data-book]').forEach(b => {
       if (on) {
         if (!('origHtml' in b.dataset)) b.dataset.origHtml = b.innerHTML;
