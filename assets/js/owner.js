@@ -662,6 +662,16 @@
     let slotReq = 0;
     async function loadSlots() {
       if (B.walkIn) { slotBox.replaceChildren(h('p', { class: 'hint' }, 'Walk-in: the visit is logged starting now and checked out right away.')); return; }
+      if (B.anyTime) {
+        // Owner/manager squeeze-in: any day, any time, outside working hours. Only overlaps are blocked.
+        const taken = D.appointments.filter(a => a.staff_id === B.staffId && T.day(a.starts_at) === B.day && !['cancelled', 'no_show'].includes(a.status)).sort(by('starts_at'));
+        slotBox.replaceChildren(
+          h('div', { class: 'row' }, field('Day', dayIn), field('Start time', customIn)),
+          h('div', { class: 'f' }, taken.length ? 'Already booked that day' : 'Nothing booked that day',
+            taken.length ? h('div', { class: 'chips' }, taken.map(a => h('button', { class: 'chip', type: 'button', title: 'Start right after this one', onclick: () => { B.custom = T.hm(T.minutes(a.ends_at)); customIn.value = B.custom; } }, `${T.time(a.starts_at)}–${T.time(a.ends_at)} · ${client(a.client_id).full_name.split(' ')[0]}`))) : null),
+          h('p', { class: 'hint' }, taken.length ? 'Tap a booked time to start right after it. Your hours are ignored; it just can\'t overlap another cut.' : 'Your hours are ignored. Pick any start time.'));
+        return;
+      }
       const my = ++slotReq; slotBox.replaceChildren(h('div', { class: 'skel', style: 'height:60px' }));
       let slots = [];
       try { slots = await LC.rpc('get_available_slots_staff', { p_staff_id: B.staffId, p_day: B.day, p_duration: dur() }); } catch (e) { toast(e.message); }
@@ -671,14 +681,23 @@
         field('Day', dayIn),
         h('div', { class: 'f' }, slots.length ? `Open times (${slots.length})` : 'No open times that day',
           slots.length ? h('div', { class: 'slots' }, slots.map(s => h('button', { class: 'slot', type: 'button', 'aria-pressed': String(B.slot === s), onclick: e => { B.slot = s; B.custom = ''; customIn.value = ''; $$('.slot', slotBox).forEach(x => x.setAttribute('aria-pressed', 'false')); e.currentTarget.setAttribute('aria-pressed', 'true'); } }, T.time(s)))) : null),
-        isAdmin() ? field('Or a custom time', customIn, 'Books even outside working hours. Double bookings are still blocked.') : null);
+        isAdmin() ? h('button', { class: 'btn sm', type: 'button', onclick: () => setAny(true) }, icon('clock'), 'Squeeze someone in at any time') : null);
     }
-    const walk = h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'nbWalk', onchange: e => { B.walkIn = e.target.checked; payBox.hidden = !B.walkIn; submit.textContent = B.walkIn ? 'Log walk-in and check out' : 'Book appointment'; loadSlots(); } }), 'Walk-in, check out now');
+    const modeBox = h('div', { class: 'chips' });
+    function setAny(on) {
+      B.anyTime = on; B.slot = null; if (on && !B.custom) { B.custom = ''; customIn.value = ''; }
+      modeBox.replaceChildren(
+        h('button', { class: 'chip', type: 'button', 'aria-pressed': String(!on), onclick: () => setAny(false) }, 'Open times'),
+        h('button', { class: 'chip', type: 'button', 'aria-pressed': String(on), onclick: () => setAny(true) }, 'Any time (ignore my hours)'));
+      loadSlots();
+    }
+    const walk = h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'nbWalk', onchange: e => { B.walkIn = e.target.checked; payBox.hidden = !B.walkIn; modeBox.hidden = B.walkIn; submit.textContent = B.walkIn ? 'Log walk-in and check out' : 'Book appointment'; loadSlots(); } }), 'Walk-in, check out now');
     payBox.hidden = true;
     const submit = h('button', { class: 'btn gold block', type: 'button', onclick: async () => {
       err.replaceChildren();
       let start;
       if (B.walkIn) { const n = new Date(); n.setSeconds(0, 0); start = new Date(+n - dur() * 6e4); }
+      else if (B.anyTime && B.custom && isAdmin()) start = T.zoned(B.day, B.custom);
       else if (B.slot) start = new Date(B.slot);
       else if (B.custom && isAdmin()) start = T.zoned(B.day, B.custom);
       else { err.replaceChildren(h('div', { class: 'err' }, 'Pick a time.')); return; }
@@ -686,16 +705,16 @@
       if (!B.clientId && ph.value && !normPhone(ph.value)) { err.replaceChildren(h('div', { class: 'err' }, 'That phone number doesn\'t look right.')); return; }
       submit.disabled = true;
       try {
-        const id = await LC.rpc('staff_book', { p_client_id: B.clientId, p_name: nm.value.trim(), p_phone: ph.value, p_email: em.value, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: start.toISOString(), p_price: priceIn.value === '' ? null : +priceIn.value, p_note: noteIn.value, p_force: !!(B.custom && !B.slot && isAdmin()), p_source: B.walkIn ? 'walk_in' : 'manual' });
+        const id = await LC.rpc('staff_book', { p_client_id: B.clientId, p_name: nm.value.trim(), p_phone: ph.value, p_email: em.value, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: start.toISOString(), p_price: priceIn.value === '' ? null : +priceIn.value, p_note: noteIn.value, p_force: !!(isAdmin() && B.custom && (B.anyTime || !B.slot)), p_source: B.walkIn ? 'walk_in' : 'manual' });
         if (B.walkIn) await LC.rpc('complete_appointment', { p_id: id, p_amount: +priceIn.value || 0, p_tip: +tipIn.value || 0, p_method: methodSel.value, p_note: '' });
         modalEl.close(); toast(B.walkIn ? 'Walk-in logged' : `Booked ${T.date(start)} at ${T.time(start)}`);
         await refresh(['appointments', 'clients', 'payments', 'inventory']);
       } catch (e) { err.replaceChildren(h('div', { class: 'err' }, e.message)); }
       finally { submit.disabled = false; }
     } }, 'Book appointment');
-    paintClient(); paintSvc(); paintPrice();
-    modal('New booking', [clientBox, svcBox, walk, slotBox, h('div', { class: 'row' }, field('Price', priceIn, 'First-visit price applies to new clients'), field('Note', noteIn)), payBox, err, submit], { wide: true });
-    loadSlots();
+    paintClient(); paintSvc(); paintPrice(); if (isAdmin()) setAny(false);
+    modal('New booking', [clientBox, svcBox, walk, isAdmin() ? modeBox : null, slotBox, h('div', { class: 'row' }, field('Price', priceIn, 'First-visit price applies to new clients'), field('Note', noteIn)), payBox, err, submit], { wide: true });
+    if (!isAdmin()) loadSlots();
   }
 
   // ===================================================================
