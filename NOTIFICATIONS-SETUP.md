@@ -13,8 +13,10 @@ The last line should say `notifications_ready = true`.
 
 1. Supabase → **Edge Functions** → **Deploy a new function** → **Via Editor**.
 2. Name it exactly `notify-owner`.
-3. Replace the sample code with everything in
-   [`supabase/functions/notify-owner/index.ts`](supabase/functions/notify-owner/index.ts), then click **Deploy**.
+3. **Select all of the sample code and delete it** (it says `Hello ${name}`), then paste everything from
+   [`supabase/functions/notify-owner/index.ts`](https://github.com/miguelflopez403-tech/lopezcuts/blob/main/supabase/functions/notify-owner/index.ts)
+   (use the Copy raw file button), then click **Deploy**.
+   If the app says *answered without a key: Hello undefined*, the sample code is still deployed: open the function → **Code**, replace it, and deploy again.
 
 No secrets to add. The function makes its own sending keys the first time it runs and keeps them in the database
 where only it can read them.
@@ -28,6 +30,16 @@ Supabase → **Integrations** → **Database Webhooks** (click **Enable webhooks
 - Type: **Supabase Edge Functions** → function `notify-owner`, method POST
 - Under HTTP Headers, click **Add auth header with service key**
 - Click **Create webhook**
+
+## 3b. Email alerts (optional, 5 minutes)
+
+1. Supabase → SQL Editor → paste and run
+   [`supabase/updates/2026-11-04-email-alerts.sql`](https://github.com/miguelflopez403-tech/lopezcuts/blob/main/supabase/updates/2026-11-04-email-alerts.sql).
+2. Sign up free at <https://resend.com/signup> **with miguel@lopezcuts.com** (until you add your domain in Resend,
+   it can only email the address you signed up with).
+3. Resend → **API Keys** → **Create API key** (Sending access) → copy it. Don't paste it in chat.
+4. Supabase → **Edge Functions** → **Secrets** → add `RESEND_API_KEY` = the key → Save.
+5. Owner app → Settings → Notifications → **Email alerts** → **Send a test email**.
 
 ## 4. Put the owner app on your iPhone (2 minutes)
 

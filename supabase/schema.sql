@@ -1216,3 +1216,8 @@ end $$;
 revoke execute on function public.save_push_subscription(text, text, text, text) from public, anon;
 grant execute on function public.save_push_subscription(text, text, text, text) to authenticated;
 
+
+-- ---------- Email alerts ----------
+alter table public.settings add column if not exists notify_email   text not null default 'miguel@lopezcuts.com';
+alter table public.settings add column if not exists email_bookings boolean not null default true;
+alter table public.settings add column if not exists email_cancels  boolean not null default true;

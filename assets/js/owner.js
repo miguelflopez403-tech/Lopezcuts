@@ -1223,7 +1223,23 @@
     paint();
     return h('div', { class: 'grid2' },
       h('section', { class: 'card stack' }, h('h2', {}, 'Phone notifications'), status),
-      h('section', { class: 'card stack' }, h('h2', {}, 'Your phones'), h('p', { class: 'hint' }, 'Turn notifications on from each phone you use. You only get alerts for bookings online, not ones you add yourself.'), devices));
+      h('section', { class: 'card stack' }, h('h2', {}, 'Your phones'), h('p', { class: 'hint' }, 'Turn notifications on from each phone you use. You only get alerts for bookings online, not ones you add yourself.'), devices),
+      isAdmin() ? emailCard() : null);
+  }
+  function emailCard() {
+    const s = S();
+    const em = h('input', { id: 'st_notifyEmail', type: 'email', value: s.notify_email ?? 'miguel@lopezcuts.com' });
+    const cb = (k, label) => { const i = h('input', { type: 'checkbox', checked: s[k] !== false }); return [i, h('label', { class: 'toggle' }, i, h('span', {}, label))]; };
+    const [b1, l1] = cb('email_bookings', 'Someone books online'), [b2, l2] = cb('email_cancels', 'A client cancels');
+    const save = async () => {
+      const v = em.value.trim().toLowerCase(); if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast('That email doesn\'t look right'); return; }
+      await run(() => LC.update('settings', 1, { notify_email: v, email_bookings: b1.checked, email_cancels: b2.checked, updated_at: new Date().toISOString() }), 'Saved'); refresh(['settings']);
+    };
+    const test = async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test-email' })); if (r) toast(r.emailed === 'sent' ? 'Test email sent. Check your inbox.' : 'Email not sent: ' + r.emailed); };
+    return h('section', { class: 'card stack' }, h('h2', {}, 'Email alerts'),
+      h('p', { class: 'hint' }, 'Also get an email for each online booking. Needs a free Resend account (see NOTIFICATIONS-SETUP.md).'),
+      field('Send to', em), l1, l2,
+      h('div', { class: 'row' }, h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save'), h('button', { class: 'btn sm', type: 'button', onclick: test }, 'Send a test email')));
   }
   function setTexts() {
     const s = S(); let mode = s.text_mode || 'manual';

@@ -8,6 +8,8 @@
 //     needs to subscribe, and { action: 'test' } sends a test notification to your phones.
 // The push keys are created on the first call and stored in public.push_keys, which only
 // this function can read. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
+// Email alerts: add the secret RESEND_API_KEY (from resend.com). The address and on/off
+// switches are in the dashboard (Settings → Notifications).
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -48,6 +50,11 @@ Deno.serve(async (req) => {
       const sent = await sendAll(sb, subs ?? [], { title: 'Lopezcuts', body: 'Notifications are on. You\'ll get one every time someone books.', url: '/owner', tag: 'test' });
       return json({ sent, devices: (subs ?? []).length });
     }
+    if (payload.action === 'test-email') {
+      const { data: st } = await sb.from('settings').select('notify_email').eq('id', 1).maybeSingle();
+      const emailed = await sendEmail(st?.notify_email, { title: 'Lopezcuts email alerts are on', body: 'You\'ll get an email like this every time someone books online.', url: '/owner' }, req);
+      return json({ emailed });
+    }
     return json({ error: 'Unknown action' }, 400);
   }
 
@@ -66,7 +73,7 @@ Deno.serve(async (req) => {
   if (dup) return json({ skipped: 'already notified' });
 
   const [{ data: st }, { data: c }, { data: svc }] = await Promise.all([
-    sb.from('settings').select('timezone').eq('id', 1).maybeSingle(),
+    sb.from('settings').select('*').eq('id', 1).maybeSingle(),
     sb.from('clients').select('full_name').eq('id', a.client_id).maybeSingle(),
     sb.from('services').select('name').eq('id', a.service_id).maybeSingle(),
   ]);
@@ -81,7 +88,9 @@ Deno.serve(async (req) => {
   const want = (subs ?? []).filter((s: any) => (kind === 'booked' ? s.notify_bookings : s.notify_cancels)
     && (s.profiles.role !== 'employee' || s.profiles.staff_id === a.staff_id));
   const sent = await sendAll(sb, want, msg);
-  return json({ kind, sent, devices: want.length });
+  const emailed = (kind === 'booked' ? st?.email_bookings : st?.email_cancels) !== false
+    ? await sendEmail(st?.notify_email, msg, req) : 'off';
+  return json({ kind, sent, devices: want.length, emailed });
 });
 
 async function sendAll(sb: any, subs: any[], msg: Record<string, string>) {
@@ -96,4 +105,28 @@ async function sendAll(sb: any, subs: any[], msg: Record<string, string>) {
     }
   }
   return sent;
+}
+
+// Email through Resend. Without a domain set up in Resend, it sends from onboarding@resend.dev,
+// which only delivers to the email you signed up to Resend with (use miguel@lopezcuts.com).
+async function sendEmail(to: string | null | undefined, msg: Record<string, string>, req: Request) {
+  const key = env('RESEND_API_KEY');
+  if (!key) return 'no RESEND_API_KEY secret';
+  if (!to) return 'no email set';
+  const site = env('SITE_URL') || 'https://www.lopezcuts.com';
+  const link = site + (msg.url || '/owner');
+  const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: env('EMAIL_FROM') || 'Lopezcuts <onboarding@resend.dev>',
+      to: [to], subject: msg.title,
+      text: `${msg.body}\n\nOpen your dashboard: ${link}`,
+      html: `<div style="font-family:Arial,sans-serif;font-size:16px;line-height:1.5"><p style="font-size:18px;margin:0 0 6px"><b>${esc(msg.title)}</b></p><p style="margin:0 0 16px">${esc(msg.body)}</p><p><a href="${link}" style="background:#d4b46a;color:#111;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open dashboard</a></p></div>`,
+    }),
+  });
+  if (r.ok) return 'sent';
+  const j = await r.json().catch(() => ({}));
+  return 'failed: ' + String(j.message ?? r.statusText).slice(0, 200);
 }
