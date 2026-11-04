@@ -100,7 +100,7 @@
       e.preventDefault(); btn.disabled = true; out.replaceChildren();
       const lu = await lockedUntil(); if (lu) { showLocked(lu); return; }
       try {
-        if (mode === 'password') { await LC.auth.signInPassword(email.value.trim(), pw.value); await gate(); }
+        if (mode === 'password') { await LC.auth.signInPassword(email.value.trim(), pw.value); justSignedIn = true; await gate(); }
         else { await LC.auth.sendLink(email.value.trim()); out.replaceChildren(h('div', { class: 'okmsg' }, 'Check your email for a sign-in link. It works once and expires in an hour.')); }
       } catch (err) {
         const bad = /Invalid login/i.test(err.message);
@@ -133,7 +133,7 @@
   function showMfaChallenge(factorId) {
     showAuth(h('div', { class: 'stack' },
       h('h2', {}, '2-step verification'), h('p', { class: 'muted' }, 'Open your authenticator app (Google Authenticator, 1Password, Authy…) and enter the code for Lopezcuts.'),
-      codeForm(async c => { await LC.auth.verify(factorId, c); enter(); }),
+      codeForm(async c => { await LC.auth.verify(factorId, c); justSignedIn = true; enter(); }),
       h('button', { class: 'btn ghost block', type: 'button', onclick: async () => { await LC.auth.signOut(); location.reload(); } }, 'Sign out')));
   }
   async function showMfaEnroll() {
@@ -172,13 +172,32 @@
     finally { gating = false; }
   }
 
-  // Auto-lock after 30 minutes without activity (live mode).
-  let lastActive = Date.now();
-  ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
-  setInterval(async () => {
-    if (LC.mode !== 'live' || !entered) return;
-    if (Date.now() - lastActive > 30 * 60 * 1000) { entered = false; await LC.auth.signOut(); showLogin('You were signed out after 30 minutes of inactivity.'); }
-  }, 60 * 1000);
+  // "Remember me" (owner only): this device stays signed in for 30 days instead of locking after 30 idle minutes.
+  const REM_KEY = 'lc-remember-until', REM_DAYS = 30;
+  const remembered = () => { try { return +localStorage.getItem(REM_KEY) > Date.now(); } catch { return false; } };
+  const setRemember = on => { try { on ? localStorage.setItem(REM_KEY, String(Date.now() + REM_DAYS * 864e5)) : localStorage.removeItem(REM_KEY); } catch { } };
+  let justSignedIn = false;
+  function offerRemember() {
+    if (!justSignedIn || LC.mode !== 'live' || ME?.role !== 'owner' || remembered()) return;
+    justSignedIn = false;
+    const close = modal('Remember me?', [
+      h('p', {}, 'Stay signed in on this device for 30 days for a quicker login next time. Only say yes on your own phone or computer.'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn gold', type: 'button', onclick: () => { setRemember(true); close(); toast('This device is remembered for 30 days'); } }, icon('check'), 'Remember me'),
+        h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Not now'))]);
+  }
+
+  // Auto-lock after 30 minutes without activity (live mode), unless this device is remembered.
+  // The last-active time is saved on the device, so closing and reopening the app doesn't skip the lock.
+  const IDLE_MS = 30 * 60 * 1000, LAST_KEY = 'lc-last-active';
+  const savedActive = () => { try { return +localStorage.getItem(LAST_KEY) || 0; } catch { return 0; } };
+  let lastActive = Date.now(), lastSaved = 0;
+  const touch = () => { lastActive = Date.now(); if (entered && lastActive - lastSaved > 15000) { lastSaved = lastActive; try { localStorage.setItem(LAST_KEY, String(lastActive)); } catch { } } };
+  ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, touch, { passive: true, capture: true }));
+  const idleTooLong = () => !remembered() && Date.now() - Math.max(lastActive, 0) > IDLE_MS;
+  async function idleLock() { entered = false; setRemember(false); await LC.auth.signOut(); showLogin('You were signed out after 30 minutes of inactivity.'); }
+  setInterval(() => { if (LC.mode === 'live' && entered && idleTooLong()) idleLock(); }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && LC.mode === 'live' && entered && idleTooLong()) idleLock(); });
 
   // ===================================================================
   //  DATA
@@ -289,7 +308,7 @@
     await load();
     const want = location.hash.slice(1);
     UI.view = allowed().some(v => v.id === want) ? want : 'today';
-    renderNav(); render(); renderBanner();
+    renderNav(); render(); renderBanner(); lastSaved = 0; touch(); offerRemember();
     LC.realtime(p => {
       if (p.eventType === 'INSERT' && p.new?.source === 'online') toast(`New online booking: ${T.date(p.new.starts_at)} at ${T.time(p.new.starts_at)}`);
       refresh(['appointments', 'clients']);
@@ -313,7 +332,7 @@
       h('button', { class: 'btn sm block', type: 'button', onclick: signOut }, icon('out'), 'Sign out'));
     $('#topDate').textContent = T.date(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
   }
-  async function signOut() { entered = false; await LC.auth.signOut(); if (LC.mode === 'demo') showDemoLogin(); else location.reload(); }
+  async function signOut() { entered = false; setRemember(false); await LC.auth.signOut(); if (LC.mode === 'demo') showDemoLogin(); else location.reload(); }
   function go(id) { UI.view = id; try { history.replaceState(null, '', '#' + id); } catch { } renderNav(); render(); $('#view').focus({ preventScroll: true }); scrollTo(0, 0); }
   addEventListener('hashchange', () => { const id = location.hash.slice(1); if (entered && allowed().some(v => v.id === id) && id !== UI.view) go(id); });
   function render() {
@@ -1426,7 +1445,8 @@
       h('section', { class: 'card stack' }, h('h2', {}, 'Your account'),
         h('dl', { class: 'dl' }, h('dt', {}, 'Name'), h('dd', {}, ME.full_name || '—'), h('dt', {}, 'Email'), h('dd', {}, ME.email), h('dt', {}, 'Role'), h('dd', { style: 'text-transform:capitalize' }, ME.role), h('dt', {}, 'Chair'), h('dd', {}, staffName(ME.staff_id) || 'Not linked'),
           h('dt', {}, '2-step'), h('dd', {}, ME.role === 'employee' ? 'Optional for employees' : h('span', { class: 'pill confirmed' }, 'On'))),
-        h('p', { class: 'hint' }, 'You\'re signed out automatically after 30 minutes without activity.'),
+        remembered() ? h('p', { class: 'hint' }, 'This device is remembered, so you stay signed in. ', h('button', { class: 'link-btn', type: 'button', onclick: () => { setRemember(false); toast('This device will sign out after 30 idle minutes again'); render(); } }, 'Forget this device'))
+          : h('p', { class: 'hint' }, 'You\'re signed out automatically after 30 minutes without activity.', ME.role === 'owner' && LC.mode === 'live' ? [' ', h('button', { class: 'link-btn', type: 'button', onclick: () => { setRemember(true); toast('This device is remembered for 30 days'); render(); } }, 'Remember this device')] : null),
         h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: signOut }, icon('out'), 'Sign out')),
       h('section', { class: 'card stack' }, h('h2', {}, 'Set a password'), h('p', { class: 'hint' }, 'Use at least 10 characters. A password manager makes this easy.'),
         field('New password', p1), field('Type it again', p2), out,
@@ -1462,6 +1482,9 @@
       await LC.ready;
       const s = await LC.auth.session();
       if (!s) return LC.mode === 'demo' ? showDemoLogin() : showLogin();
+      // Reopened after 30+ idle minutes on a device that isn't remembered: sign in again.
+      const last = savedActive();
+      if (LC.mode === 'live' && !remembered() && last && Date.now() - last > IDLE_MS) { setRemember(false); await LC.auth.signOut(); return showLogin('You were signed out after 30 minutes of inactivity.'); }
       await gate();
     } catch (e) { showLogin(e.message); }
   })();
