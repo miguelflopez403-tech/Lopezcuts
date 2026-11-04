@@ -1170,25 +1170,28 @@
     const u8 = b64 => { const p = '='.repeat((4 - b64.length % 4) % 4), s = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); };
     const status = h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Checking this phone…'));
     const devices = h('div', { class: 'stack' });
+    const err = h('p', { class: 'hint', style: 'color:var(--danger, #b3261e)', hidden: true });
+    const put = (...k) => { status.replaceChildren(...k.filter(Boolean)); status.append(err); };
     const reg = () => navigator.serviceWorker.register('/owner-sw.js', { scope: '/owner' });
     const mySub = async () => { if (!can) return null; const r = await navigator.serviceWorker.getRegistration('/owner'); return r ? r.pushManager.getSubscription() : null; };
     const rows = async () => { try { return await LC.list('push_subscriptions', { order: 'created_at' }); } catch { return []; } };
 
     async function turnOn(btn) {
-      btn.disabled = true;
+      btn.disabled = true; err.hidden = true; let step = 'asking for permission';
       try {
         const perm = await Notification.requestPermission();
-        if (perm !== 'granted') { toast(ios ? 'Allow notifications in iPhone Settings → Lopezcuts → Notifications' : 'Notifications are blocked for this site. Allow them in your browser settings.'); return; }
-        const r = await reg(); await navigator.serviceWorker.ready;
-        const { publicKey } = await LC.fn('notify-owner', { action: 'setup' });
-        let sub = await r.pushManager.getSubscription();
-        if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(publicKey) });
+        if (perm !== 'granted') throw new Error(ios ? 'Allow notifications in iPhone Settings → Notifications → Lopezcuts.' : 'Notifications are blocked for this site. Click the icon left of the web address and allow Notifications.');
+        step = 'starting the notification helper'; const r = await reg(); await navigator.serviceWorker.ready;
+        step = 'reaching the notify-owner function'; const res = await LC.fn('notify-owner', { action: 'setup' });
+        if (!res || !res.publicKey) throw new Error('notify-owner answered without a key: ' + JSON.stringify(res).slice(0, 120));
+        step = 'subscribing this device'; let sub = await r.pushManager.getSubscription();
+        if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(res.publicKey) });
         const j = sub.toJSON();
-        await LC.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: device() });
+        step = 'saving this device'; await LC.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: device() });
         toast('Notifications are on for this ' + device());
         LC.fn('notify-owner', { action: 'test' }).catch(() => { });
-      } catch (e) { toast(e.message || 'Couldn\'t turn on notifications'); }
-      finally { btn.disabled = false; paint(); }
+      } catch (e) { console.error(e); err.textContent = `Didn't work while ${step}: ${e.message || e}`; err.hidden = false; }
+      finally { btn.disabled = false; await paint(); }
     }
     async function turnOff() {
       const sub = await mySub(); if (!sub) return;
@@ -1199,18 +1202,18 @@
       const sub = await mySub().catch(() => null); const list = await rows();
       const mine = sub && list.find(r => r.endpoint === sub.endpoint);
       const tog = (row, key, label) => h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: !!row[key], onchange: async e => { await run(() => LC.update('push_subscriptions', row.id, { [key]: e.target.checked }), 'Saved'); } }), h('span', {}, label));
-      if (LC.mode === 'demo') status.replaceChildren(h('p', { class: 'hint' }, 'This is the preview. On the live owner app, this is where you turn on booking alerts for your phone.'));
-      else if (ios && !installed) status.replaceChildren(
+      if (LC.mode === 'demo') put(h('p', { class: 'hint' }, 'This is the preview. On the live owner app, this is where you turn on booking alerts for your phone.'));
+      else if (ios && !installed) put(
         h('p', {}, h('b', {}, 'First, add this page to your Home Screen.'), ' iPhones only allow notifications from apps on the Home Screen.'),
         h('ol', { class: 'small', style: 'margin:0;padding-left:20px;line-height:1.7' }, h('li', {}, 'Open this page in Safari.'), h('li', {}, 'Tap the Share button (square with an arrow).'), h('li', {}, 'Tap Add to Home Screen, then Add.'), h('li', {}, 'Open Lopezcuts from your Home Screen, sign in, and come back here.')));
-      else if (!can) status.replaceChildren(h('p', { class: 'hint' }, 'This browser can\'t show notifications. On iPhone, update to iOS 16.4 or newer and use the Home Screen app.'));
-      else if (mine && Notification.permission === 'granted') status.replaceChildren(
+      else if (!can) put(h('p', { class: 'hint' }, 'This browser can\'t show notifications. On iPhone, update to iOS 16.4 or newer and use the Home Screen app.'));
+      else if (mine && Notification.permission === 'granted') put(
         h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ` This ${device()} gets notifications.`),
         tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A client cancels'),
         h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check your phone.' : 'No phones got it. Try turning it off and on.'); } }, 'Send a test'),
           h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this phone')));
       else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);
-        status.replaceChildren(h('p', {}, `Get a notification on this ${device()} every time someone books with you.`), b,
+        put(h('p', {}, `Get a notification on this ${device()} every time someone books with you.`), b,
           Notification.permission === 'denied' ? h('p', { class: 'hint' }, ios ? 'Notifications are blocked. Turn them on in iPhone Settings → Notifications → Lopezcuts.' : 'Notifications are blocked for this site in your browser settings.') : null); }
       const others = list.filter(r => !sub || r.endpoint !== sub.endpoint);
       devices.replaceChildren(...(list.length ? list.map(r => h('div', { class: 'li' }, h('div', { class: 'main' }, h('div', { class: 't' }, r.device || 'Device', sub && r.endpoint === sub.endpoint ? ' (this one)' : ''),
