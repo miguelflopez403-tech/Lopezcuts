@@ -522,18 +522,33 @@
   // ---------------- Leave a review ----------------
   function openReview() {
     const past = pastBookings();
-    if (past.length === 1) { openManage(past[0].token); return; }
     B.step = 9; sheet.showModal(); header('Leave a review', 'Reviews', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
-    const inp = h('input', { id: 'reviewLink', placeholder: 'Paste your booking link', autocomplete: 'off' });
-    const recent = past.length ? [h('p', { class: 'opt-label' }, 'Your recent visits'), ...past.slice(0, 3).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('star'), `Review my ${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} cut`))] : [];
+    let rating = 5; const stars = h('div', { class: 'star-pick', role: 'radiogroup', 'aria-label': 'Rating' });
+    const paint = () => [...stars.children].forEach((b, i) => { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', String(i + 1 === rating)); });
+    for (let i = 1; i <= 5; i++) stars.append(h('button', { type: 'button', role: 'radio', 'aria-label': `${i} star${i > 1 ? 's' : ''}`, onclick: () => { rating = i; paint(); } }, icon('star')));
+    paint();
+    const text = h('textarea', { id: 'orBody', maxlength: '1000', placeholder: 'How was your cut?' });
+    const nm = h('input', { id: 'orName', maxlength: '40', autocomplete: 'name', placeholder: 'e.g. Jordan M.' });
+    const ph = h('input', { id: 'orPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: 'Optional' });
+    const send = h('button', { class: 'btn gold block', type: 'button' }, icon('star'), 'Post review');
+    send.onclick = async () => {
+      if (nm.value.trim().length < 2) { toast('Please add your name'); nm.focus(); return; }
+      send.disabled = true;
+      try {
+        await LC.rpc('submit_open_review', { p_rating: rating, p_body: text.value, p_display_name: nm.value, p_phone: ph.value });
+        body.replaceChildren(h('div', { class: 'step-anim' }, h('div', { class: 'done' }, h('div', { class: 'done-check' }, icon('check')), h('h3', {}, 'Thank you!'),
+          h('p', { class: 'muted' }, 'Your review will show up on the site once Miguel approves it.'),
+          h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => sheet.close() }, 'Done'))));
+      } catch (e) { toast(e.message || 'Something went wrong. Please try again.'); send.disabled = false; }
+    };
+    const recent = past.length ? [h('p', { class: 'opt-label' }, 'Your recent visits'), ...past.slice(0, 2).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('star'), `Review my ${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} cut`)), h('p', { class: 'opt-label' }, 'Or write one here')] : [];
     body.replaceChildren(h('div', { class: 'step-anim' },
-      h('p', { class: 'muted' }, 'Thanks for taking a minute! Reviews open once your cut is done and help other people find me.'),
-      ...recent,
-      h('p', { class: 'opt-label' }, past.length ? 'Or use your booking link' : 'Use your booking link'),
-      h('p', { class: 'muted small' }, 'It\'s in your booking confirmation and in Miguel\'s thank-you text. Tapping it opens the review form.'),
-      h('div', { class: 'field' }, h('label', { for: 'reviewLink' }, 'Booking link'), inp),
-      h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, icon('star'), 'Write my review'),
-      h('p', { class: 'muted small' }, 'Can\'t find it? Reply to Miguel\'s text and he\'ll send you a review link.')));
+      h('p', { class: 'muted' }, 'Thanks for taking a minute! Reviews help other people find me.'),
+      ...recent, stars,
+      h('div', { class: 'field' }, h('label', { for: 'orBody' }, 'Your review'), text),
+      h('div', { class: 'field' }, h('label', { for: 'orName' }, 'Name to show'), nm),
+      h('div', { class: 'field' }, h('label', { for: 'orPhone' }, 'Phone you booked with'), ph, h('p', { class: 'muted small' }, 'Optional. Marks you as a verified client. Never shown on the site.')),
+      send));
   }
   document.addEventListener('click', e => { const t = e.target.closest('[data-review]'); if (t) { e.preventDefault(); openReview(); } });
   if (location.hash === '#review') setTimeout(openReview, 0);

@@ -1082,7 +1082,7 @@
     return [
       h('div', { class: 'grid2', style: 'margin-bottom:18px' },
         h('section', { class: 'card' }, h('div', { class: 'big-rating' }, h('span', { class: 'n' }, avg.toFixed(1)), h('div', {}, h('div', { class: 'stars', style: 'color:var(--gold);letter-spacing:3px;font-size:1.2rem' }, '★★★★★'), h('div', { class: 'muted small' }, `${count} reviews: ${bc} on Booksy, ${site.length} on your site`))),
-          h('p', { class: 'hint', style: 'margin-top:10px' }, 'Clients can review from their booking link after a checked-out visit. New reviews wait here until you publish them.')),
+          h('p', { class: 'hint', style: 'margin-top:10px' }, 'Anyone can leave a review from the site. Ones marked Verified Client matched a phone number with a finished visit. New reviews wait here until you publish them.')),
         isAdmin() ? h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('h2', {}, 'Add a Booksy review')),
           h('div', { class: 'stack' }, h('div', { class: 'row' }, field('Name', nm), field('Type', lb), field('Rating', rt)), field('Review', tx),
             h('button', { class: 'btn dark', type: 'button', onclick: async () => { if (!nm.value.trim() || !tx.value.trim()) { toast('Add a name and the review text'); return; } await run(() => LC.insert('reviews', { rating: +rt.value, body: tx.value.trim(), display_name: nm.value.trim(), label: lb.value, source: 'booksy', status: 'published', reply: '' }), 'Added to the site'); refresh(['reviews']); } }, 'Add review'))) : null),
