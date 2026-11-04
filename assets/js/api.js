@@ -405,6 +405,8 @@
         db.reviews.unshift({ id: uuid(), appointment_id: a.id, client_id: a.client_id, rating: p_rating, body: String(p_body || '').trim().slice(0, 1000), display_name: String(p_display_name || 'Client').trim().slice(0, 40), label: a.new_client ? 'First Time Client' : 'Returning Client', source: 'site', status: 'pending', reply: '', created_at: new Date().toISOString() });
         commit('reviews'); return { ok: true };
       },
+      login_lock_status() { return { locked_until: null }; },
+      report_failed_login() { return { locked_until: null }; },
       submit_open_review({ p_rating, p_body, p_display_name, p_phone }) {
         const name = String(p_display_name || '').trim().slice(0, 40), body = String(p_body || '').trim();
         if (!(p_rating >= 1 && p_rating <= 5)) fail('Please choose 1 to 5 stars.');

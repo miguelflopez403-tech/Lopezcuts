@@ -1,7 +1,8 @@
 // Lopezcuts: phone notifications for the owner app (web push).
 //
 // Called two ways:
-//  1. By the Supabase Database Webhook on appointments INSERT/UPDATE (see NOTIFICATIONS-SETUP.md).
+//  1. By Supabase Database Webhooks on appointments INSERT/UPDATE and security_events INSERT
+//     (see NOTIFICATIONS-SETUP.md).
 //     It re-reads the appointment from the database and only notifies once per event,
 //     so a fake call can't send made-up messages or spam.
 //  2. By the owner app (signed in): { action: 'setup' } returns the public key the phone
@@ -58,7 +59,30 @@ Deno.serve(async (req) => {
     return json({ error: 'Unknown action' }, 400);
   }
 
-  // ---- database webhook ----
+  // ---- database webhook: failed sign-ins ----
+  if (payload?.table === 'security_events' && payload?.record?.id) {
+    const { data: ev } = await sb.from('security_events').select('*').eq('id', payload.record.id).maybeSingle();
+    if (!ev || ev.notified_at || !ev.ip) return json({ skipped: 'nothing to notify' });
+    const hourAgo = new Date(Date.now() - 36e5).toISOString();
+    const { data: recent } = await sb.from('security_events').select('id, stage, notified_at').eq('ip', ev.ip).gte('at', hourAgo).order('at');
+    const list = recent ?? [];
+    const third = list.length === 3 && list[2].id === ev.id;
+    const firstCode = ev.stage === 'code' && list.filter((r: any) => r.stage === 'code')[0]?.id === ev.id;
+    if (!third && !firstCode) return json({ skipped: 'below alert threshold' });
+    const { data: claimed } = await sb.from('security_events').update({ notified_at: new Date().toISOString() }).eq('id', ev.id).is('notified_at', null).select().maybeSingle();
+    if (!claimed) return json({ skipped: 'already notified' });
+    const who = ev.email ? ` using ${ev.email}` : '';
+    const msg = firstCode
+      ? { title: '⚠️ Wrong 2-step code on your dashboard', body: `Someone got past the password${who} but entered a wrong 2-step code (internet address ${ev.ip}). If this wasn't you, change your password now.${third ? ' That address is locked out for 1 hour.' : ''}`, url: '/owner#setup', tag: 'security-' + ev.ip }
+      : { title: '🔒 Sign-in blocked', body: `3 failed sign-ins${who} from internet address ${ev.ip}. That address is locked out for 1 hour. If this wasn't you, nothing else is needed.`, url: '/owner#setup', tag: 'security-' + ev.ip };
+    const { data: subs } = await sb.from('push_subscriptions').select('*, profiles!inner(role, active)').eq('profiles.active', true).in('profiles.role', ['owner', 'manager']);
+    const sent = await sendAll(sb, subs ?? [], msg);
+    const { data: st } = await sb.from('settings').select('notify_email').eq('id', 1).maybeSingle();
+    const emailed = await sendEmail(st?.notify_email, msg, req);
+    return json({ kind: 'security', sent, emailed });
+  }
+
+  // ---- database webhook: appointments ----
   if (payload?.table !== 'appointments' || !payload?.record?.id) return json({ skipped: 'not an appointment event' });
   const { data: a } = await sb.from('appointments').select('*').eq('id', payload.record.id).maybeSingle();
   if (!a) return json({ skipped: 'not found' });

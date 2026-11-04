@@ -74,6 +74,23 @@
       h('p', { class: 'hint' }, 'When it\'s live, this screen asks for an invited email, a password and a 6-digit code from an authenticator app.')));
   }
 
+  // Break-in protection: 3 wrong passwords or codes from one network = locked out for 1 hour.
+  // The database enforces the lock too; this screen just explains it.
+  async function lockedUntil() { if (LC.mode !== 'live') return null; try { const r = await LC.rpc('login_lock_status'); return r && r.locked_until && new Date(r.locked_until) > Date.now() ? new Date(r.locked_until) : null; } catch { return null; } }
+  async function reportFail(email, stage) {
+    if (LC.mode !== 'live') return false;
+    try { const r = await LC.rpc('report_failed_login', { p_email: email || '', p_stage: stage }); if (r && r.locked_until) { await LC.auth.signOut().catch(() => { }); showLocked(new Date(r.locked_until)); return true; } } catch { }
+    return false;
+  }
+  function showLocked(until) {
+    const left = h('b', {}); let t;
+    const tick = () => { const ms = until - Date.now(); if (ms <= 0) { clearInterval(t); location.reload(); return; } left.textContent = `${Math.floor(ms / 6e4)}m ${String(Math.floor(ms % 6e4 / 1e3)).padStart(2, '0')}s`; };
+    tick(); t = setInterval(tick, 1000);
+    showAuth(h('div', { class: 'stack' }, h('h2', {}, 'Locked for 1 hour'),
+      h('p', { class: 'muted' }, 'Too many wrong sign-in tries from this network. For safety, sign-in is paused here and the owner has been alerted.'),
+      h('p', {}, 'Try again in ', left, ` (at ${until.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}).`)));
+  }
+
   function showLogin(msg, mode = 'password') {
     const email = h('input', { id: 'lgEmail', type: 'email', autocomplete: 'username', required: true, placeholder: 'you@example.com' });
     const pw = h('input', { id: 'lgPass', type: 'password', autocomplete: 'current-password', placeholder: 'Password' });
@@ -81,10 +98,15 @@
     const btn = h('button', { class: 'btn gold block', type: 'submit' }, mode === 'password' ? 'Sign in' : 'Email me a sign-in link');
     const form = h('form', { class: 'stack', onsubmit: async e => {
       e.preventDefault(); btn.disabled = true; out.replaceChildren();
+      const lu = await lockedUntil(); if (lu) { showLocked(lu); return; }
       try {
         if (mode === 'password') { await LC.auth.signInPassword(email.value.trim(), pw.value); await gate(); }
         else { await LC.auth.sendLink(email.value.trim()); out.replaceChildren(h('div', { class: 'okmsg' }, 'Check your email for a sign-in link. It works once and expires in an hour.')); }
-      } catch (err) { out.replaceChildren(h('div', { class: 'err' }, /Invalid login/i.test(err.message) ? 'Wrong email or password. First time? Use "Email me a sign-in link" and set a password after.' : err.message)); }
+      } catch (err) {
+        const bad = /Invalid login/i.test(err.message);
+        if (bad && await reportFail(email.value.trim(), 'password')) return;
+        out.replaceChildren(h('div', { class: 'err' }, bad ? 'Wrong email or password. After 3 wrong tries, sign-in is locked for 1 hour.' : err.message));
+      }
       finally { btn.disabled = false; }
     } },
       h('div', {}, h('h2', {}, 'Staff sign in'), h('p', { class: 'muted' }, 'Only people the owner has invited can sign in.')),
@@ -104,7 +126,7 @@
     const code = h('input', { id: 'mfaCode', class: 'code-input', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', pattern: '[0-9]{6}', placeholder: '000000', required: true });
     const out = h('div', { 'aria-live': 'polite' });
     const btn = h('button', { class: 'btn gold block', type: 'submit' }, label);
-    const f = h('form', { class: 'stack', onsubmit: async e => { e.preventDefault(); btn.disabled = true; out.replaceChildren(); try { await onCode(code.value.trim()); } catch (err) { out.replaceChildren(h('div', { class: 'err' }, /invalid|expired/i.test(err.message) ? 'That code didn\'t work. Codes change every 30 seconds, so try the newest one.' : err.message)); code.select(); } finally { btn.disabled = false; } } },
+    const f = h('form', { class: 'stack', onsubmit: async e => { e.preventDefault(); btn.disabled = true; out.replaceChildren(); try { await onCode(code.value.trim()); } catch (err) { if (/invalid|expired/i.test(err.message) && await reportFail(ME?.email, 'code')) return; out.replaceChildren(h('div', { class: 'err' }, /invalid|expired/i.test(err.message) ? 'That code didn\'t work. Codes change every 30 seconds, so try the newest one. After 3 wrong tries, sign-in is locked for 1 hour.' : err.message)); code.select(); } finally { btn.disabled = false; } } },
       field('6-digit code from your authenticator app', code), out, btn);
     setTimeout(() => code.focus(), 50); return f;
   }
@@ -136,6 +158,7 @@
   async function gate() {
     if (gating) return; gating = true;
     try {
+      const lu = await lockedUntil(); if (lu) { await LC.auth.signOut().catch(() => { }); return showLocked(lu); }
       const prof = await LC.auth.profile();
       if (!prof) return showLogin();
       if (!prof.role || prof.active === false) return showNoAccess(prof);
@@ -1168,7 +1191,7 @@
     const can = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     const device = () => ios ? (/iPad/.test(ua) || !/iPhone/.test(ua) ? 'iPad' : 'iPhone') : /Android/.test(ua) ? 'Android phone' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows computer' : 'device';
     const u8 = b64 => { const p = '='.repeat((4 - b64.length % 4) % 4), s = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); };
-    const status = h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Checking this phone…'));
+    const status = h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Checking this device…'));
     const devices = h('div', { class: 'stack' });
     const err = h('p', { class: 'hint', style: 'color:var(--danger, #b3261e)', hidden: true });
     const put = (...k) => { status.replaceChildren(...k.filter(Boolean)); status.append(err); };
@@ -1188,7 +1211,7 @@
         if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(res.publicKey) });
         const j = sub.toJSON();
         step = 'saving this device'; await LC.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: device() });
-        toast('Notifications are on for this ' + device());
+        toast('Notifications are on for this device');
         LC.fn('notify-owner', { action: 'test' }).catch(() => { });
       } catch (e) { console.error(e); err.textContent = `Didn't work while ${step}: ${e.message || e}`; err.hidden = false; }
       finally { btn.disabled = false; await paint(); }
@@ -1196,7 +1219,7 @@
     async function turnOff() {
       const sub = await mySub(); if (!sub) return;
       const ep = sub.endpoint; await sub.unsubscribe().catch(() => { });
-      await run(() => LC.remove('push_subscriptions', ep, 'endpoint'), 'Notifications off for this ' + device()); paint();
+      await run(() => LC.remove('push_subscriptions', ep, 'endpoint'), 'Notifications are off for this device'); paint();
     }
     async function paint() {
       const sub = await mySub().catch(() => null); const list = await rows();
@@ -1208,22 +1231,22 @@
         h('ol', { class: 'small', style: 'margin:0;padding-left:20px;line-height:1.7' }, h('li', {}, 'Open this page in Safari.'), h('li', {}, 'Tap the Share button (square with an arrow).'), h('li', {}, 'Tap Add to Home Screen, then Add.'), h('li', {}, 'Open Lopezcuts from your Home Screen, sign in, and come back here.')));
       else if (!can) put(h('p', { class: 'hint' }, 'This browser can\'t show notifications. On iPhone, update to iOS 16.4 or newer and use the Home Screen app.'));
       else if (mine && Notification.permission === 'granted') put(
-        h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ` This ${device()} gets notifications.`),
+        h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ' This device gets notifications.'),
         tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A client cancels'),
         h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check your phone.' : 'No phones got it. Try turning it off and on.'); } }, 'Send a test'),
-          h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this phone')));
+          h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this device')));
       else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);
-        put(h('p', {}, `Get a notification on this ${device()} every time someone books with you.`), b,
+        put(h('p', {}, 'Get a notification on this device every time someone books with you.'), b,
           Notification.permission === 'denied' ? h('p', { class: 'hint' }, ios ? 'Notifications are blocked. Turn them on in iPhone Settings → Notifications → Lopezcuts.' : 'Notifications are blocked for this site in your browser settings.') : null); }
       const others = list.filter(r => !sub || r.endpoint !== sub.endpoint);
       devices.replaceChildren(...(list.length ? list.map(r => h('div', { class: 'li' }, h('div', { class: 'main' }, h('div', { class: 't' }, r.device || 'Device', sub && r.endpoint === sub.endpoint ? ' (this one)' : ''),
         h('div', { class: 's' }, `Added ${T.date(r.created_at, { month: 'short', day: 'numeric' })}${r.last_ok_at ? ' · last sent ' + T.date(r.last_ok_at, { month: 'short', day: 'numeric' }) : ''}`)),
-        others.includes(r) ? armBtn('Remove', async () => { await run(() => LC.remove('push_subscriptions', r.id), 'Removed'); paint(); }) : null)) : [h('div', { class: 'empty' }, 'No phones yet.')]));
+        others.includes(r) ? armBtn('Remove', async () => { await run(() => LC.remove('push_subscriptions', r.id), 'Removed'); paint(); }) : null)) : [h('div', { class: 'empty' }, 'No devices yet.')]));
     }
     paint();
     return h('div', { class: 'grid2' },
-      h('section', { class: 'card stack' }, h('h2', {}, 'Phone notifications'), status),
-      h('section', { class: 'card stack' }, h('h2', {}, 'Your phones'), h('p', { class: 'hint' }, 'Turn notifications on from each phone you use. You only get alerts for bookings online, not ones you add yourself.'), devices),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Notifications'), status),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Your devices'), h('p', { class: 'hint' }, 'Turn notifications on from each phone or computer you use. You only get alerts for bookings online, not ones you add yourself.'), devices),
       isAdmin() ? emailCard() : null);
   }
   function emailCard() {
@@ -1237,7 +1260,7 @@
     };
     const test = async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test-email' })); if (r) toast(r.emailed === 'sent' ? 'Test email sent. Check your inbox.' : 'Email not sent: ' + r.emailed); };
     return h('section', { class: 'card stack' }, h('h2', {}, 'Email alerts'),
-      h('p', { class: 'hint' }, 'Also get an email for each online booking. Needs a free Resend account (see NOTIFICATIONS-SETUP.md).'),
+      h('p', { class: 'hint' }, 'Also get an email for each online booking.'),
       field('Send to', em), l1, l2,
       h('div', { class: 'row' }, h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save'), h('button', { class: 'btn sm', type: 'button', onclick: test }, 'Send a test email')));
   }

@@ -1221,3 +1221,81 @@ grant execute on function public.save_push_subscription(text, text, text, text) 
 alter table public.settings add column if not exists notify_email   text not null default 'miguel@lopezcuts.com';
 alter table public.settings add column if not exists email_bookings boolean not null default true;
 alter table public.settings add column if not exists email_cancels  boolean not null default true;
+
+-- ---------- Break-in protection (3 tries = 1 hour lock) ----------
+create table if not exists public.security_events (
+  id          bigint generated always as identity primary key,
+  at          timestamptz not null default now(),
+  ip          text not null default '',
+  email       text not null default '',
+  stage       text not null default 'password' check (stage in ('password', 'code')),
+  user_agent  text not null default '',
+  notified_at timestamptz
+);
+create index if not exists security_events_ip_at on public.security_events (ip, at desc);
+alter table public.security_events enable row level security;
+revoke all on public.security_events from anon, authenticated;
+drop policy if exists security_events_owner_read on public.security_events;
+create policy security_events_owner_read on public.security_events for select using (public.is_owner());
+grant select on public.security_events to authenticated;
+
+-- The visitor's internet address, as seen by Supabase
+create or replace function public.client_ip() returns text
+language sql stable as $$
+  select coalesce(nullif(btrim(split_part(
+    coalesce(current_setting('request.headers', true)::json ->> 'x-forwarded-for',
+             current_setting('request.headers', true)::json ->> 'cf-connecting-ip', ''), ',', 1)), ''), '')
+$$;
+
+-- When this address is locked until (null = not locked)
+create or replace function public.lock_until(p_ip text default null) returns timestamptz
+language sql stable security definer set search_path = public as $$
+  with f as (
+    select at from public.security_events
+     where ip = coalesce(p_ip, public.client_ip()) and ip <> '' and at > now() - interval '1 hour'
+     order by at desc limit 3)
+  select case when count(*) >= 3 then min(at) + interval '1 hour' end from f
+$$;
+
+create or replace function public.ip_locked() returns boolean
+language sql stable security definer set search_path = public as $$ select coalesce(public.lock_until() > now(), false) $$;
+
+-- The sign-in page calls this after a failed try. Returns when the lock ends, if locked.
+create or replace function public.report_failed_login(p_email text default '', p_stage text default 'password')
+returns json
+language plpgsql volatile security definer set search_path = public as $$
+declare v_ip text := public.client_ip(); v_ua text;
+begin
+  v_ua := left(coalesce(current_setting('request.headers', true)::json ->> 'user-agent', ''), 200);
+  -- cap the log at 20 entries per address per hour so it can't be flooded
+  if (select count(*) from public.security_events where ip = v_ip and at > now() - interval '1 hour') < 20 then
+    insert into public.security_events (ip, email, stage, user_agent)
+    values (v_ip, left(lower(btrim(coalesce(p_email, ''))), 120), case when p_stage = 'code' then 'code' else 'password' end, v_ua);
+  end if;
+  return json_build_object('locked_until', public.lock_until(v_ip));
+end $$;
+
+create or replace function public.login_lock_status() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('locked_until', public.lock_until())
+$$;
+grant execute on function public.report_failed_login(text, text) to anon, authenticated;
+grant execute on function public.login_lock_status() to anon, authenticated;
+revoke execute on function public.lock_until(text) from public, anon, authenticated;
+
+-- A locked address sees nothing, even when signed in
+create or replace function public.has_role(variadic roles public.app_role[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid()
+      and p.active
+      and p.role = any (roles)
+      and (
+        p.role = 'employee'
+        or not public.mfa_required()
+        or coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
+      )
+  ) and not public.ip_locked();
+$$;
+

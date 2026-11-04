@@ -41,6 +41,17 @@ Supabase → **Integrations** → **Database Webhooks** (click **Enable webhooks
 4. Supabase → **Edge Functions** → **Secrets** → add `RESEND_API_KEY` = the key → Save.
 5. Owner app → Settings → Notifications → **Email alerts** → **Send a test email**.
 
+## 3c. Break-in alerts (2 minutes)
+
+1. SQL Editor → run [`supabase/updates/2026-11-04-lockout.sql`](https://github.com/miguelflopez403-tech/lopezcuts/blob/main/supabase/updates/2026-11-04-lockout.sql).
+   The last result is a security report; every row should say ok.
+2. Integrations → Database Webhooks → **Create a new hook**: name `security-alerts`, table `security_events`,
+   event **Insert**, type Supabase Edge Functions → `notify-owner`, POST, **Add auth header with service key** → Create.
+
+3 wrong passwords or 2-step codes from the same network within an hour lock that network out for 1 hour
+(the database itself refuses to show it anything). You get a notification + email when that happens,
+and any time someone types your correct password but a wrong 2-step code.
+
 ## 4. Put the owner app on your iPhone (2 minutes)
 
 iPhones only show notifications from apps on your Home Screen, so do this first.
