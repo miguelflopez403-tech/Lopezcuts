@@ -319,6 +319,7 @@
   function render() {
     const v = allowed().find(x => x.id === UI.view) || VIEWS[0];
     $('#viewTitle').textContent = v.label;
+    $('#newBooking').hidden = !['schedule', 'calendar'].includes(v.id); document.body.dataset.view = v.id;
     try { $('#view').replaceChildren(...[v.render()].flat().filter(Boolean)); }
     catch (e) { console.error(e); $('#view').replaceChildren(h('div', { class: 'err' }, 'This page hit an error: ' + e.message)); }
   }
