@@ -21,7 +21,7 @@ where only it can read them.
 
 ## 3. Connect bookings to the function (2 minutes)
 
-Supabase → **Database** → **Webhooks** → **Create a new hook**:
+Supabase → **Integrations** → **Database Webhooks** (click **Enable webhooks** the first time) → **Create a new hook**:
 - Name: `notify-owner`
 - Table: `appointments`
 - Events: **Insert** and **Update**

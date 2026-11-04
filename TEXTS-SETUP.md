@@ -57,7 +57,7 @@ Don't send them in chat or put them in the code.
 
 ## 4. Connect the database to the function (2 minutes)
 
-Supabase → **Database** → **Webhooks** → **Create a new hook**:
+Supabase → **Integrations** → **Database Webhooks** (click **Enable webhooks** the first time) → **Create a new hook**:
 - Name: `send-text`
 - Table: `sms_outbox`
 - Events: **Insert** only
