@@ -254,7 +254,7 @@
       $('.tag', feat).textContent = `Up to ${(back || first).duration_min} min`;
     }
     if (home) {
-      const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · ${home.duration_min} min`;
+      const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · up to ${home.duration_min} min`;
       const hb = $('#homeBook'); if (hb) { hb.dataset.svc = home.id; hb.textContent = 'Book a hometown cut'; }
       $$('[data-home]').forEach(x => { x.dataset.svc = home.id; });
     }
@@ -262,15 +262,51 @@
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
   }
 
+  // ---------------- Booksy notice + fully booked ----------------
+  // Until Thanksgiving 2026, clients still book on Booksy. From Nov 27 (Salt Lake time) this goes away on its own.
+  const BOOKSY_UNTIL = '2026-11-27', BOOKSY_URL = 'https://lopezcuts140.booksy.com/k';
+  const onBooksy = () => T.today() < BOOKSY_UNTIL;
+  const IG = 'https://instagram.com/lopezcuts.dmv';
+  function showNotice() {
+    const n = $('#siteNotice'); if (!n) return;
+    const parts = [];
+    if (onBooksy()) parts.push(h('span', {}, h('b', {}, 'Booking through Booksy until Thanksgiving.'), ' ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')));
+    else if (state.full) parts.push(h('span', {}, h('b', {}, 'No open times right now.'), ' Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list.'));
+    n.hidden = !parts.length; n.replaceChildren(...parts);
+  }
+  // When nothing is open, every booking button says Fully booked and can't be tapped.
+  function setFull(on) {
+    state.full = on; document.body.classList.toggle('is-full', on);
+    $$('[data-book]').forEach(b => {
+      if (on) {
+        if (!('origHtml' in b.dataset)) b.dataset.origHtml = b.innerHTML;
+        b.setAttribute('aria-disabled', 'true'); b.tabIndex = -1; if (b.tagName === 'BUTTON') b.disabled = true;
+        if (b.classList.contains('fit-row')) { const p = b.querySelector('.fit-p'); if (p) p.textContent = 'Fully booked'; }
+        else if (b.classList.contains('btn') || b.classList.contains('link-btn')) b.textContent = 'Fully booked';
+      } else if ('origHtml' in b.dataset) {
+        b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; b.removeAttribute('aria-disabled'); b.removeAttribute('tabindex'); if (b.tagName === 'BUTTON') b.disabled = false;
+      }
+    });
+    showNotice();
+  }
+  document.addEventListener('click', e => { if (state.full && e.target.closest('[data-book]')) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+
   // ---------------- Next opening ----------------
   async function nextOpening() {
     const staff = state.staff[0]; const cut = state.services.find(s => !s.is_addon && s.bookable);
+    showNotice();
     if (!staff || !cut) return;
-    if (state.settings && !state.settings.booking_open) { $('#nextWhen').textContent = 'Booking paused'; $('#nextSub').textContent = 'DM @lopezcuts.dmv to book'; return; }
+    const noTimes = () => {
+      setFull(true);
+      if (onBooksy()) { $('#nextWhen').textContent = 'Booking on Booksy'; $('#nextSub').replaceChildren('Until Thanksgiving. ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')); }
+      else { $('#nextWhen').textContent = 'No open times right now'; $('#nextSub').replaceChildren('Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list'); }
+    };
+    if (state.settings && !state.settings.booking_open) { noTimes(); return; }
     try {
-      const days = await LC.rpc('get_open_days', { p_staff_id: staff.id, p_from: T.today(), p_days: 14, p_duration: cut.duration_min });
+      const days = await LC.rpc('get_open_days', { p_staff_id: staff.id, p_from: T.today(), p_days: Math.min(90, +state.settings?.booking_window_days || 90), p_duration: cut.duration_min });
       const d = days.find(x => x.openings > 0);
-      if (!d) { $('#nextWhen').textContent = 'Fully booked'; $('#nextSub').textContent = 'Text to get on the waitlist'; return; }
+      if (!d) { noTimes(); return; }
+      setFull(false);
       const slots = await LC.rpc('get_available_slots', { p_staff_id: staff.id, p_day: d.day, p_duration: cut.duration_min });
       const s = slots[0]; if (!s) return;
       const rel = d.day === T.today() ? 'Today' : d.day === T.addDays(T.today(), 1) ? 'Tomorrow' : T.dayLabel(d.day, { weekday: 'long' });
@@ -416,7 +452,7 @@
         h('div', { class: 'row' }, h('span', {}, 'Service'), h('b', {}, svc().name + (B.addons.size ? ' + ' + addonList().filter(a => B.addons.has(a.id)).map(a => a.name).join(' + ') : ''))),
         h('div', { class: 'row' }, h('span', {}, 'Barber'), h('b', {}, (state.staff.find(s => s.id === B.staffId) || {}).display_name)),
         h('div', { class: 'row' }, h('span', {}, 'Price'), h('b', {}, svc().new_client_price != null ? `${money(+svc().new_client_price + addonsPrice())} if it's your first visit, ${money(+svc().price + addonsPrice())} if you've been before` : money(+svc().price + addonsPrice())))),
-      h('p', { class: 'muted small' }, `Pay at your appointment. Need to cancel? Use your booking link up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before, or text Miguel.`),
+      h('p', { class: 'muted small' }, `Pay at your appointment. Need to cancel? Use your booking link up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before, or reply to Miguel's text.`),
     ];
   }
   async function next() {
