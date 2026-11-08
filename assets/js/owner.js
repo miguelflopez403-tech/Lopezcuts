@@ -870,6 +870,22 @@
   // ===================================================================
   //  CLIENTS
   // ===================================================================
+  const FOUND_LABEL = { instagram: 'Instagram', friend: 'A friend', snapchat: 'Snapchat', tiktok: 'TikTok', google: 'Google', flyer: 'Flyer / QR code', booksy: 'Booksy', other: 'Other' };
+  // "How did you find me?" answers from the booking form, so Miguel can see which posts and channels bring in clients.
+  function foundCard() {
+    const days = UI.foundDays || 30; const since = Date.now() - days * 864e5;
+    const inRange = D.clients.filter(c => c.heard_from && (days === 9999 || +new Date(c.heard_from_at || c.created_at) > since));
+    const counts = {}; inRange.forEach(c => { counts[c.heard_from] = (counts[c.heard_from] || 0) + 1; });
+    const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]); const max = rows.length ? rows[0][1] : 1;
+    const ranges = [[30, '30 days'], [90, '90 days'], [9999, 'All time']];
+    return h('section', { class: 'card', style: 'margin-bottom:14px' },
+      h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'How clients found you'), h('div', { class: 'sub' }, 'From the "How did you find Miguel?" question on the booking form. Use lopezcuts.com/?src=ig in your Instagram bio and ?src=flyer on QR codes to fill it in for them.')),
+        h('div', { class: 'chips' }, ranges.map(([d, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(days === d), onclick: () => { UI.foundDays = d; render(); } }, l)))),
+      rows.length ? h('div', { style: 'display:grid;gap:8px' }, rows.map(([k, n]) => h('div', { style: 'display:grid;grid-template-columns:120px 1fr 36px;gap:10px;align-items:center' },
+        h('span', { class: 'small' }, FOUND_LABEL[k] || k),
+        h('span', { style: 'height:10px;border-radius:6px;background:var(--line);overflow:hidden' }, h('span', { style: `display:block;height:100%;width:${Math.max(4, Math.round(n / max * 100))}%;background:#c9a24a` })),
+        h('b', { class: 'num r' }, n)))) : h('div', { class: 'empty' }, 'No answers yet. They show up here as new clients book.'));
+  }
   function viewClients() {
     const now = Date.now(); const q = UI.clientQ.trim().toLowerCase(); const qd = q.replace(/\D/g, '');
     const rows = D.clients.map(c => ({ c, s: D.stats.get(c.id) }));
@@ -888,6 +904,7 @@
     const search = h('input', { class: 'inp', id: 'clSearch', type: 'search', placeholder: 'Search name, phone or email', value: UI.clientQ, style: 'max-width:320px', oninput: e => { UI.clientQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('#clSearch'); n.focus(); try { n.setSelectionRange(pos, pos); } catch { } } });
     const th = (k, l, cls) => h('th', { class: cls, style: sorts[k] ? 'cursor:pointer' : null, onclick: sorts[k] ? () => { UI.clientSort = k; render(); } : null }, l + (UI.clientSort === k ? ' ↓' : ''));
     return [
+      isAdmin() ? foundCard() : null,
       h('div', { class: 'row between', style: 'margin-bottom:12px' }, search,
         h('div', { class: 'row' }, isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: () => csv('lopezcuts-clients.csv', [['Name', 'Phone', 'Email', 'Visits', 'Last visit', 'No-shows', 'Spent', 'Tags', 'Notes'], ...list.map(r => [r.c.full_name, fmtPhone(r.c.phone), r.c.email, r.s.visits, r.s.last ? T.day(r.s.last) : '', r.s.noShows, r.s.spend, (r.c.tags || []).join(' '), r.c.notes])]) }, icon('down'), 'Export') : null,
           isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: openImport }, icon('up'), 'Import from Booksy') : null,
@@ -916,14 +933,16 @@
     const bl = h('input', { type: 'checkbox', id: 'cfBlock', checked: c?.blocked });
     const pv = h('input', { id: 'cfPrior', type: 'number', min: '0', step: '1', value: String(c?.prior_visits || 0) });
     const pl = h('input', { id: 'cfPriorLast', type: 'date', value: c?.prior_last_visit || '' });
+    const hf = h('select', { id: 'cfFound' }, h('option', { value: '' }, 'Not sure'), Object.entries(FOUND_LABEL).map(([v, l]) => h('option', { value: v, selected: c?.heard_from === v }, l)));
     const err = h('div');
     modal(c ? 'Edit client' : 'Add client', [field('Name', nm), h('div', { class: 'row' }, field('Phone', ph), field('Email', em)), h('div', { class: 'row' }, field('Birthday', bd), field('Tags', tg, 'Separate with commas')),
       h('div', { class: 'row' }, field('Visits on Booksy', pv, 'Added to their visit count'), field('Last Booksy visit', pl)),
+      field('How they found you', hf),
       h('label', { class: 'toggle' }, mk, 'OK to text about openings and promos'), h('label', { class: 'toggle' }, bl, 'Block online booking for this client'), err,
       h('button', { class: 'btn gold block', type: 'button', onclick: async () => {
         if (!nm.value.trim()) { err.replaceChildren(h('div', { class: 'err' }, 'Enter a name.')); return; }
         const phone = ph.value.trim() ? normPhone(ph.value) : null; if (ph.value.trim() && !phone) { err.replaceChildren(h('div', { class: 'err' }, 'That phone number doesn\'t look right.')); return; }
-        const row = { full_name: nm.value.trim(), phone, email: em.value.trim().toLowerCase() || null, birthday: bd.value || null, tags: tg.value.split(',').map(x => x.trim()).filter(Boolean), marketing_opt_in: mk.checked, blocked: bl.checked, prior_visits: Math.max(0, parseInt(pv.value, 10) || 0), prior_last_visit: pl.value || null };
+        const row = { full_name: nm.value.trim(), phone, email: em.value.trim().toLowerCase() || null, birthday: bd.value || null, tags: tg.value.split(',').map(x => x.trim()).filter(Boolean), marketing_opt_in: mk.checked, blocked: bl.checked, prior_visits: Math.max(0, parseInt(pv.value, 10) || 0), prior_last_visit: pl.value || null, ...((hf.value || null) !== (c?.heard_from || null) ? { heard_from: hf.value || null, heard_from_at: hf.value ? new Date().toISOString() : null } : {}) };
         try { const r = c ? await LC.update('clients', c.id, row) : await LC.insert('clients', { ...row, source: 'manual' }); modalEl.close(); toast(c ? 'Saved' : 'Client added'); await refresh(['clients']); openClient((r || c).id); }
         catch (e) { err.replaceChildren(h('div', { class: 'err' }, /duplicate|unique/i.test(e.message) ? 'A client with that phone number already exists.' : e.message)); }
       } }, c ? 'Save' : 'Add client')]);
@@ -1007,7 +1026,7 @@
     const sms = smsHref(c.phone);
     const avgTip = s.visits ? s.tips / s.visits : 0;
     drawer('Client', [
-      h('div', { class: 'client-head' }, h('span', { class: 'avatar' }, initials(c.full_name)), h('div', {}, h('div', { class: 'nm' }, c.full_name), h('div', { class: 'small muted' }, `Client since ${T.date(c.created_at, { month: 'short', year: 'numeric' })} · ${c.source === 'online' ? 'booked online' : c.source}`), h('div', { class: 'chips', style: 'margin-top:6px' }, (c.tags || []).map(t => h('span', { class: 'pill plain' }, t)), c.blocked ? h('span', { class: 'pill no_show plain' }, 'Online booking blocked') : null, c.marketing_opt_in ? h('span', { class: 'pill confirmed plain' }, 'OK to text promos') : null))),
+      h('div', { class: 'client-head' }, h('span', { class: 'avatar' }, initials(c.full_name)), h('div', {}, h('div', { class: 'nm' }, c.full_name), h('div', { class: 'small muted' }, `Client since ${T.date(c.created_at, { month: 'short', year: 'numeric' })} · ${c.source === 'online' ? 'booked online' : c.source}${c.heard_from ? ' · found you on ' + (FOUND_LABEL[c.heard_from] || c.heard_from) : ''}`), h('div', { class: 'chips', style: 'margin-top:6px' }, (c.tags || []).map(t => h('span', { class: 'pill plain' }, t)), c.blocked ? h('span', { class: 'pill no_show plain' }, 'Online booking blocked') : null, c.marketing_opt_in ? h('span', { class: 'pill confirmed plain' }, 'OK to text promos') : null))),
       h('div', { class: 'stat-row' }, h('div', {}, h('b', {}, s.visits), h('span', {}, 'Visits')), h('div', {}, h('b', {}, s.noShows), h('span', {}, 'No-shows')), isAdmin() ? h('div', {}, h('b', {}, money(s.spend)), h('span', {}, 'Spent')) : h('div', {}, h('b', {}, s.cancels), h('span', {}, 'Cancels')), isAdmin() ? h('div', {}, h('b', {}, money(avgTip)), h('span', {}, 'Avg tip')) : h('div', {}, h('b', {}, s.avgGap ? Math.round(s.avgGap) + 'd' : '—'), h('span', {}, 'Between visits'))),
       s.dueBack && !s.next ? h('div', { class: 'alert ' + (+new Date(s.dueBack) < now ? 'warn' : 'info') }, icon('clock'), h('span', {}, `Comes about every ${Math.round(s.avgGap)} days. Due back around ${T.date(s.dueBack)}.`), sms ? h('a', { class: 'btn sm', href: smsHref(c.phone, `Hey ${firstName(c.full_name)}! Ready for your next cut? Book here: ${siteBase()}`) }, 'Text') : null) : null,
       s.next ? h('div', { class: 'alert good' }, icon('cal'), `Next visit ${T.date(s.next)} at ${T.time(s.next)}`) : null,

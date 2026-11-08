@@ -330,6 +330,14 @@
   // =====================================================================
   const sheet = $('#sheet'), body = $('#sheetBody'), nextBtn = $('#sheetNext'), backBtn = $('#sheetBack');
   const B = { step: 0, serviceId: null, addons: new Set(), staffId: null, day: null, slot: null, days: [], slots: null, form: { name: '', phone: '', email: '', note: '', remember: true }, result: null, error: '' };
+  // "How did you find me?" Links like lopezcuts.com/?src=ig (Instagram bio) or ?src=flyer (QR code) pre-fill the answer.
+  const FOUND = [['instagram', 'Instagram'], ['friend', 'A friend told me'], ['snapchat', 'Snapchat'], ['tiktok', 'TikTok'], ['google', 'Google search'], ['flyer', 'Flyer or QR code'], ['booksy', 'Booksy'], ['other', 'Something else']];
+  const SRC_ALIAS = { ig: 'instagram', insta: 'instagram', instagram: 'instagram', friend: 'friend', ref: 'friend', referral: 'friend', snap: 'snapchat', snapchat: 'snapchat', tiktok: 'tiktok', tt: 'tiktok', google: 'google', gbp: 'google', maps: 'google', qr: 'flyer', flyer: 'flyer', poster: 'flyer', booksy: 'booksy' };
+  try {
+    const qs = new URLSearchParams(location.search); const raw = String(qs.get('src') || qs.get('utm_source') || '').toLowerCase();
+    if (SRC_ALIAS[raw]) sessionStorage.setItem('lopezcuts-src', SRC_ALIAS[raw]);
+    B.form.found = sessionStorage.getItem('lopezcuts-src') || '';
+  } catch { B.form.found = ''; }
   const STEPS = ['Choose your service', 'Pick a time', 'Your details', 'You\'re booked'];
   const svc = () => state.services.find(s => s.id === B.serviceId);
   const addonList = () => state.services.filter(s => s.is_addon && s.active && s.bookable);
@@ -447,6 +455,7 @@
         h('div', { class: 'field' }, h('label', { for: 'bPhone' }, 'Mobile number'), h('input', { id: 'bPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, placeholder: '(801) 555-1234', value: f.phone, oninput: bind('phone') }), h('span', { class: 'hint' }, 'For your confirmation text. Never shared.')),
         h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email (optional)'), h('input', { id: 'bEmail', type: 'email', autocomplete: 'email', value: f.email, oninput: bind('email') }))),
       h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '500', placeholder: 'Style you want, reference photo on IG, first time, etc.', oninput: bind('note') }, f.note)),
+      h('div', { class: 'field' }, h('label', { for: 'bFound' }, 'How did you find Miguel? (optional)'), h('select', { id: 'bFound', onchange: bind('found') }, h('option', { value: '' }, 'Pick one'), FOUND.map(([v, l]) => h('option', { value: v, selected: f.found === v }, l)))),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember my name and number on this device'),
       h('div', { class: 'summary' },
         h('div', { class: 'row' }, h('span', {}, 'When'), h('b', {}, `${T.dayLabel(B.day, { weekday: 'long', month: 'short', day: 'numeric' })}, ${T.time(B.slot)}`)),
@@ -467,6 +476,7 @@
       try {
         const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: f.note.trim() });
         try { if (f.remember) localStorage.setItem('lopezcuts-me', JSON.stringify({ name: f.name, phone: f.phone, email: f.email, remember: true })); else localStorage.removeItem('lopezcuts-me'); } catch { }
+        if (f.found && r?.token) LC.rpc('set_heard_from', { p_token: r.token, p_heard_from: f.found }).catch(() => { });
         rememberBooking(r); B.result = r; B.form.note = ''; B.busy = false; go(3); nextOpening();
       } catch (e) {
         B.busy = false; B.error = e.message;
