@@ -354,7 +354,7 @@
   $$('[data-book]').forEach(b => b.addEventListener('click', e => { if (b.id === 'homeBook' && !b.dataset.svc) return; if ('home' in b.dataset && !b.dataset.svc) { e.preventDefault(); document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' }); return; } e.preventDefault(); openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : b.dataset.svc ? { serviceId: b.dataset.svc } : {}); }));
   $('#sheetClose').addEventListener('click', () => sheet.close());
   sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });
-  sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-')) history.replaceState(null, '', location.pathname + location.search); });
+  sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-') || location.hash === '#book') history.replaceState(null, '', location.pathname + location.search); });
   backBtn.addEventListener('click', () => go(B.step - 1));
   nextBtn.addEventListener('click', () => next());
 
@@ -550,7 +550,7 @@
     btn.hidden = !next; if (next) btn.onclick = () => { location.hash = '#manage-' + next.token; };
   }
   window.addEventListener('hashchange', () => checkHash());
-  function checkHash() { const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
+  function checkHash() { if (location.hash === '#book') { openBooking(); return; } const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
   addEventListener('hashchange', checkHash);
   $('#findBooking').addEventListener('click', () => {
     B.step = 9; sheet.showModal(); header('Find my booking', 'Manage', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
