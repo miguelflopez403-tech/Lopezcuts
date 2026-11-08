@@ -879,7 +879,7 @@
     const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]); const max = rows.length ? rows[0][1] : 1;
     const ranges = [[30, '30 days'], [90, '90 days'], [9999, 'All time']];
     return h('section', { class: 'card', style: 'margin-bottom:14px' },
-      h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'How clients found you'), h('div', { class: 'sub' }, 'From the "How did you find Miguel?" question on the booking form. Use lopezcuts.com/?src=ig in your Instagram bio and ?src=flyer on QR codes to fill it in for them.')),
+      h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'How clients found you'), h('div', { class: 'sub' }, 'From the "How did you find Miguel?" question on First Time Haircut bookings. Use lopezcuts.com/?src=ig in your Instagram bio and ?src=flyer on QR codes to fill it in for them.')),
         h('div', { class: 'chips' }, ranges.map(([d, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(days === d), onclick: () => { UI.foundDays = d; render(); } }, l)))),
       rows.length ? h('div', { style: 'display:grid;gap:8px' }, rows.map(([k, n]) => h('div', { style: 'display:grid;grid-template-columns:120px 1fr 36px;gap:10px;align-items:center' },
         h('span', { class: 'small' }, FOUND_LABEL[k] || k),
