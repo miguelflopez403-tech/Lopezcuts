@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lopez Cuts | Barber in Salt Lake City · Fades, Tapers &amp; Mullets</title>
-<meta name="description" content="Lopez Cuts is a Salt Lake City barber: taper fades, burst fades, mullets, scissor cuts and curly hair by Miguel Lopez. $25 first cut, Free Touch-Ups. Book online in under a minute.">
+<title>Lopez Cuts by Miguel Lopez | Barber in Salt Lake City · Fades &amp; Mullets</title>
+<meta name="description" content="Lopez Cuts (@lopezcuts.dmv) is Miguel Lopez’s barber business in Salt Lake City: taper fades, burst fades, mullets, scissor cuts and curly hair. $25 first cut, Free Touch-Ups. Book online in under a minute.">
 <link rel="canonical" href="https://www.lopezcuts.com/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:site_name" content="Lopez Cuts">
@@ -24,7 +24,7 @@
  "@type": "BarberShop",
  "@id": "https://www.lopezcuts.com/#business",
  "name": "Lopez Cuts",
- "alternateName": "Lopezcuts",
+ "alternateName": ["Lopezcuts", "LopezCuts", "Lopez Cuts SLC", "Lopez Cuts DMV"],
  "url": "https://www.lopezcuts.com/",
  "image": "https://www.lopezcuts.com/assets/img/og-image.jpg",
  "logo": "https://www.lopezcuts.com/assets/img/icon-512.png",
@@ -48,13 +48,12 @@
    "name": "University of Utah"
   }
  ],
- "founder": {
-  "@type": "Person",
-  "name": "Miguel Lopez"
- },
+ "founder": { "@id": "https://www.lopezcuts.com/#miguel" },
+ "employee": { "@id": "https://www.lopezcuts.com/#miguel" },
  "sameAs": [
-  "https://instagram.com/lopezcuts.dmv",
-  "https://www.linkedin.com/in/miguel-lopez-ml403/"
+  "https://www.instagram.com/lopezcuts.dmv/",
+  "https://lopezcuts140.booksy.com/",
+  "https://booksy.com/en-us/1552140_lopezcuts_barber-shop_37796_salt-lake-city"
  ],
  "openingHoursSpecification": [
   {
@@ -110,6 +109,35 @@
 }
 </script>
 <script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@graph": [
+  {
+   "@type": "WebSite",
+   "@id": "https://www.lopezcuts.com/#website",
+   "url": "https://www.lopezcuts.com/",
+   "name": "Lopez Cuts",
+   "alternateName": ["Lopezcuts", "LopezCuts", "lopezcuts.com"],
+   "publisher": { "@id": "https://www.lopezcuts.com/#business" }
+  },
+  {
+   "@type": "Person",
+   "@id": "https://www.lopezcuts.com/#miguel",
+   "name": "Miguel Lopez",
+   "jobTitle": "Barber and founder of Lopez Cuts",
+   "url": "https://www.lopezcuts.com/miguel-lopez",
+   "worksFor": { "@id": "https://www.lopezcuts.com/#business" },
+   "affiliation": { "@type": "CollegeOrUniversity", "name": "University of Utah" },
+   "homeLocation": { "@type": "City", "name": "Salt Lake City, Utah" },
+   "sameAs": [
+    "https://www.instagram.com/lopezcuts.dmv/",
+    "https://www.linkedin.com/in/miguel-lopez-ml403/"
+   ]
+  }
+ ]
+}
+</script>
+<script type="application/ld+json">
 {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How much is a haircut?", "acceptedAnswer": {"@type": "Answer", "text": "$25 for your first cut and $30 after that. Add a beard or design for +$5. Touch-ups are free."}}, {"@type": "Question", "name": "How long does a cut take?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 40 minutes, so you can fit it between classes or before work."}}, {"@type": "Question", "name": "Where are you located?", "acceptedAnswer": {"@type": "Answer", "text": "Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private."}}, {"@type": "Question", "name": "Do I need an app or an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. Book right on this site in about a minute with your name and phone number."}}, {"@type": "Question", "name": "How far ahead can I book?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 3 months ahead, and as late as 12 hours before an open time."}}, {"@type": "Question", "name": "Can I cancel or reschedule?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Use your booking link up to 6 hours before your appointment. Closer than that, just reply to Miguel’s text."}}, {"@type": "Question", "name": "What if something’s off after my cut?", "acceptedAnswer": {"@type": "Answer", "text": "Reach out and come back in. Touch-ups are free, especially for curly hair."}}, {"@type": "Question", "name": "What styles do you do?", "acceptedAnswer": {"@type": "Answer", "text": "Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "You pay after your cut. Zelle is preferred, and cash, Venmo and Apple Pay all work too."}}]}
 </script>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -149,7 +177,7 @@
     <nav class="nav-links" aria-label="Main">
       <a href="#services">Prices</a>
       <a href="#work">Portfolio</a>
-      <a href="#story">Story</a>
+      <a href="/miguel-lopez">About Miguel</a>
       <a href="#reviews">Reviews</a>
       <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
@@ -245,7 +273,7 @@
         <div class="ht-copy">
           <p class="kicker">Back home in the DMV</p>
           <h3>Hometown Haircut <span class="ht-price">$25 · up to 40 min</span></h3>
-          <p class="muted">Back home in DC or Virginia? Book a day Miguel is in town, or DM <a class="link" href="https://instagram.com/lopezcuts.dmv" target="_blank" rel="noopener">@lopezcuts.dmv</a> to get on the list for his next trip.</p>
+          <p class="muted">Back home in DC or Virginia? Book a day Miguel is in town, or DM <a class="link" href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener">@lopezcuts.dmv</a> to get on the list for his next trip.</p>
         </div>
         <a class="btn ghost-dark" id="homeBook" data-book href="#book">Book a hometown cut</a>
       </div>
@@ -300,7 +328,7 @@
       </div>
       <p class="placeholder-note" id="placeholderNote" hidden><svg class="ic"><use href="#i-cal"/></svg>These are placeholder tiles. Real photos of Miguel's cuts are on the way.</p>
       <div class="gallery" id="gallery" aria-live="polite"></div>
-      <p class="center muted small">More on Instagram: <a class="link" href="https://instagram.com/lopezcuts.dmv" target="_blank" rel="noopener">@lopezcuts.dmv</a></p>
+      <p class="center muted small">More on Instagram: <a class="link" href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener">@lopezcuts.dmv</a></p>
     </div>
   </section>
 
@@ -324,6 +352,7 @@
         <blockquote class="pull">This isn't a side hustle or a phase. It's my passion, and it's what I want to do for the rest of my life.</blockquote>
         <p>&ldquo;Nothing beats the moment someone looks in the mirror and lights up. Making people look good, feel good, and walk out more confident than they walked in is why I do this. I love my job and everything about it.&rdquo;</p>
         <p class="sig">Miguel Lopez<span>Founder &amp; Barber</span></p>
+        <p><a class="link" href="/miguel-lopez">More about Miguel Lopez &rarr;</a></p>
       </div>
     </div>
   </section>
@@ -405,8 +434,10 @@
       <h3 class="foot-h">Contact</h3>
       <ul class="foot-list">
         <li><svg class="ic"><use href="#i-mail"/></svg><a href="mailto:miguel@lopezcuts.com">miguel@lopezcuts.com</a><button class="copy" type="button" data-copy="miguel@lopezcuts.com" aria-label="Copy email address"><svg class="ic"><use href="#i-copy"/></svg></button></li>
-        <li><svg class="ic"><use href="#i-ig"/></svg><a href="https://instagram.com/lopezcuts.dmv" target="_blank" rel="noopener">@lopezcuts.dmv</a></li>
-        <li><svg class="ic"><use href="#i-in"/></svg><a href="https://www.linkedin.com/in/miguel-lopez-ml403/" target="_blank" rel="noopener">Miguel Lopez</a></li>
+        <li><svg class="ic"><use href="#i-ig"/></svg><a href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener">@lopezcuts.dmv</a></li>
+        <li><svg class="ic"><use href="#i-in"/></svg><a href="https://www.linkedin.com/in/miguel-lopez-ml403/" target="_blank" rel="noopener me">Miguel Lopez on LinkedIn</a></li>
+        <li><svg class="ic"><use href="#i-scissors"/></svg><a href="/miguel-lopez">About Miguel Lopez</a></li>
+        <li><svg class="ic"><use href="#i-pin"/></svg><a href="/university-of-utah-barber">Barber near the University of Utah</a></li>
         <li><svg class="ic"><use href="#i-pin"/></svg><span>Salt Lake City, UT · address sent with your confirmation</span></li>
       </ul>
     </div>

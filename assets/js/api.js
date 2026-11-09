@@ -228,7 +228,7 @@
 
       const first = ['Andre', 'Bryce', 'Carlos', 'Dante', 'Eli', 'Fabian', 'Gavin', 'Hector', 'Isaiah', 'Jalen', 'Kai', 'Luis', 'Marcus', 'Nico', 'Omar', 'Preston', 'Quinn', 'Rafael', 'Sam', 'Tyrese'];
       const last = ['Reyes', 'Coleman', 'Nguyen', 'Brooks', 'Ortiz', 'Hale', 'Kim', 'Price', 'Diaz', 'Foster', 'Young', 'Silva', 'Ward', 'Moreno', 'Hayes', 'Patel', 'Lane', 'Cruz', 'Bell', 'Grant'];
-      first.forEach((f, i) => d.clients.push({ id: uuid(), full_name: `${f} ${last[i]} (sample)`, phone: '1801555' + String(1000 + i * 37).slice(-4), email: i % 3 ? null : `${f.toLowerCase()}@example.com`, birthday: i % 4 ? null : `2004-${String((i % 12) + 1).padStart(2, '0')}-1${i % 9}`, notes: i % 3 === 0 ? pick(['#1.5 on the sides, scissor on top', 'Low taper, keep the length up top', 'Sensitive skin, no alcohol on lineup', 'Likes a hard part on the left']) : '', tags: i % 5 === 0 ? ['VIP'] : (i % 7 === 0 ? ['Curly'] : []), marketing_opt_in: i % 2 === 0, blocked: false, source: i % 4 ? 'booksy' : 'online', created_by: null, created_at: new Date(now - (60 + i * 5) * 864e5).toISOString() }));
+      first.forEach((f, i) => d.clients.push({ id: uuid(), full_name: `${f} ${last[i]} (sample)`, phone: '1801555' + String(1000 + i * 37).slice(-4), email: i % 3 ? null : `${f.toLowerCase()}@example.com`, birthday: i % 4 ? null : `2004-${String((i % 12) + 1).padStart(2, '0')}-1${i % 9}`, notes: i % 3 === 0 ? pick(['#1.5 on the sides, scissor on top', 'Low taper, keep the length up top', 'Sensitive skin, no alcohol on lineup', 'Likes a hard part on the left']) : '', tags: i % 5 === 0 ? ['VIP'] : (i % 7 === 0 ? ['Curly'] : []), marketing_opt_in: i % 2 === 0, blocked: false, source: i % 4 ? 'booksy' : 'online', heard_from: i % 3 ? pick(['instagram', 'instagram', 'instagram', 'friend', 'friend', 'snapchat', 'google', 'flyer']) : null, created_by: null, created_at: new Date(now - (60 + i * 5) * 864e5).toISOString() }));
       d.client_notes.push({ id: uuid(), client_id: d.clients[0].id, body: 'Wants to grow out the top for winter. Go lighter on the sides next time.', author_id: 'demo-owner', created_at: new Date(now - 12 * 864e5).toISOString() });
       d.client_notes.push({ id: uuid(), client_id: d.clients[3].id, body: 'Paid with Venmo, prefers early evening.', author_id: 'demo-owner', created_at: new Date(now - 30 * 864e5).toISOString() });
 
@@ -388,6 +388,12 @@
         const a = { id: uuid(), client_id: c.id, staff_id: p_staff_id, service_id: svc.id, addon_ids: ad.ids, starts_at: startIso, ends_at: new Date(+new Date(startIso) + dur * 6e4).toISOString(), status: 'booked', price, new_client: isNew, source: 'online', client_message: String(p_note || '').slice(0, 500), internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: null, completed_at: null, cancelled_at: null, cancelled_by: null, cancel_reason: '', created_by: null, created_at: new Date().toISOString() };
         db.appointments.push(a); queueText('booked', a); commit('appointments');
         return { token: a.manage_token, starts_at: a.starts_at, ends_at: a.ends_at, price, new_client: isNew, service: svc.name, addons: ad.names, staff: (db.staff.find(x => x.id === p_staff_id) || {}).display_name, status: 'booked' };
+      },
+      set_heard_from({ p_token, p_heard_from }) {
+        const ok = ['instagram', 'friend', 'snapchat', 'tiktok', 'google', 'flyer', 'booksy', 'other'];
+        const a = db.appointments.find(x => x.manage_token === p_token); const c = a && db.clients.find(x => x.id === a.client_id);
+        if (!c || !ok.includes(p_heard_from) || c.heard_from) return { ok: false };
+        c.heard_from = p_heard_from; c.heard_from_at = new Date().toISOString(); commit('clients'); return { ok: true };
       },
       get_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); return a ? bookingView(a) : null; },
       confirm_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); if (a && a.status === 'booked' && new Date(a.starts_at) > Date.now()) { a.status = 'confirmed'; a.confirmed_at = new Date().toISOString(); commit('appointments'); } return a ? bookingView(a) : null; },
