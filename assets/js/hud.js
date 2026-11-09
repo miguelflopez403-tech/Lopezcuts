@@ -2,7 +2,7 @@
 // glass tube with spiral stripes, tapered base) in the logo gold, with calm motion.
 // Signature feature: like a real shop pole, it turns when the chair is open. It reads Miguel's
 // real next opening from the booking calendar (site.js sends 'lc:next'): an open slot today or
-// tomorrow spins it at full speed with a live 'CHAIR OPEN' readout; booked up slows it to a crawl.
+// tomorrow spins it at full speed; booked up slows it to a crawl.
 // Tapping the pole grabs that opening.
 (() => {
   const root = document.getElementById('hudGlobe'); if (!root) return;
@@ -147,18 +147,6 @@
     // words in front of the pole
     items.filter(it => it.z >= 0).sort((a, b) => a.z - b.z).forEach(it => glowText(it.w, it.x, it.y, .3 + .7 * it.z, fs, it === best && it.z > .8));
 
-    // live chair readout: a status light over the finial, the opening under the base
-    const ls = v => { if ('letterSpacing' in ctx) ctx.letterSpacing = v; };
-    const open = live.state === 'open' && live.soon, blink = open ? .55 + .45 * Math.sin(t * 2.4) : .5;
-    const ty = neckY - S * .018 - ballR * 2 - S * .032;
-    ctx.font = `700 ${Math.max(10, S * .024)}px Rajdhani, Archivo, sans-serif`; ls((S * .006).toFixed(1) + 'px');
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const tw = ctx.measureText(live.top).width, lx = cx - tw / 2 - S * .022;
-    ctx.shadowColor = C(.9); ctx.shadowBlur = open ? 10 : 0; ctx.fillStyle = open ? `rgba(255,250,240,${blink.toFixed(3)})` : C(live.state === 'full' ? .35 : .55);
-    ctx.beginPath(); ctx.arc(lx, ty, S * .007, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = open ? 'rgba(255,250,240,.92)' : C(.7); ctx.fillText(live.top, cx + S * .006, ty);
-    if (live.bot) { ctx.font = `600 ${Math.max(9, S * .021)}px Rajdhani, Archivo, sans-serif`; ls((S * .004).toFixed(1) + 'px'); ctx.fillStyle = C(.62); ctx.fillText(live.bot, cx, fy + S * .02); }
-    ls('0px');
   }
 
   let visible = true, last = 0, raf = 0;
