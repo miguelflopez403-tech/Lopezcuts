@@ -82,7 +82,7 @@
   }
 
   // ---------------- Portfolio ----------------
-  const LOOKS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Designs', 'Beards'];
+  const LOOKS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Beards'];
   function placeholderArt(i) {
     const cat = LOOKS[i % LOOKS.length];
     const g = {
@@ -122,7 +122,7 @@
     }
     // Smooth nonstop glide: the strip drifts left at a steady speed, looping through one category.
     // After a full loop it fades into the next category. Hover slows it to a stop; fingers can drag it.
-    let cur = -1, swapT = 0, setW = 0, x = 0, v = 0, loops = 0, last = 0, raf = 0, drag = null, moved = 0, nudge = null;
+    let cur = -1, swapT = 0, swapN = 0, setW = 0, x = 0, v = 0, loops = 0, last = 0, raf = 0, drag = null, moved = 0, nudge = null;
     let visible = false, hovering = false, resumeAt = 0;
     const phone = matchMedia('(max-width: 600px)').matches;
     const SPEED = phone ? 42 : 56; // pixels per second
@@ -133,10 +133,13 @@
     const track = h('div', { class: 'car-track glide', 'aria-label': 'Portfolio photos' }, row);
     const card = (b, p, k, clone) => h('button', { class: 'car-card', type: 'button', tabindex: clone ? '-1' : '0', 'aria-hidden': clone ? 'true' : null, style: clone ? '' : `--d:${Math.min(k, 5) * 60}ms`, 'aria-label': `${b.title}, photo ${k + 1} of ${b.photos.length}`,
       onclick: e => { if (moved > 6) { e.preventDefault(); return; } LB = { box: b, i: k }; lbShow(); lb.showModal(); } },
-      h('img', { src: p.image_url, alt: clone ? '' : `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: k < 5 ? 'eager' : 'lazy', decoding: 'async', draggable: 'false' }),
+      h('img', { src: p.image_url, alt: clone ? '' : `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: 'eager', decoding: 'async', draggable: 'false' }),
       h('span', { class: 'car-cap' }, h('b', {}, b.title), h('small', {}, `${k + 1}/${b.photos.length}`)));
-    const place = () => { if (setW) { x = ((x % setW) + setW) % setW; } row.style.transform = `translate3d(${-x}px,0,0)`;
-      const c = chipEls[cur]; if (c && setW) c.style.setProperty('--p', Math.min(1, (loops * setW + x) / setW).toFixed(3)); };
+    let lastP = -1;
+    const place = () => { if (setW) { x = ((x % setW) + setW) % setW; } row.style.transform = `translate3d(${(-x).toFixed(2)}px,0,0)`;
+      const c = chipEls[cur]; if (c && setW) { const pr = Math.round(Math.min(1, (loops * setW + x) / setW) * 200) / 200; if (pr !== lastP) { lastP = pr; c.style.setProperty('--p', pr); } } };
+    // Decode the next category's photos before swapping so the switch never stutters or flashes.
+    const preload = b => Promise.race([Promise.all(b.photos.slice(0, 8).map(p => { const im = new Image(); im.decoding = 'async'; im.src = p.image_url; return (im.decode ? im.decode() : Promise.resolve()).catch(() => { }); })), new Promise(res => setTimeout(res, 900))]);
     function build() {
       const b = real[cur]; const base = b.photos.map((p, k) => card(b, p, k, false));
       row.replaceChildren(...base);
@@ -144,14 +147,19 @@
       setW = (cw + gap) * base.length;
       // Add copies until the strip is long enough to loop with no gap.
       let copies = 0; while ((copies + 1) * setW < track.clientWidth + setW + cw) { copies++; b.photos.forEach((p, k) => row.append(card(b, p, k, true))); }
-      x = 0; loops = 0; place();
+      x = 0; loops = 0; lastP = -1; place();
     }
     function show(i) {
       cur = (i + real.length) % real.length;
       chipEls.forEach((c, k) => { c.classList.toggle('on', k === cur); c.setAttribute('aria-selected', String(k === cur)); if (k !== cur) c.style.removeProperty('--p'); });
       const chip = chipEls[cur]; chips.scrollTo({ left: chip.offsetLeft - (chips.clientWidth - chip.offsetWidth) / 2, behavior: reduced ? 'auto' : 'smooth' });
-      clearTimeout(swapT); track.classList.add('swap');
-      swapT = setTimeout(() => { build(); track.classList.remove('swap'); resumeAt = performance.now() + 700; }, row.children.length && !reduced ? 260 : 0);
+      clearTimeout(swapT); const token = ++swapN; const first = !row.children.length;
+      preload(real[cur]).then(() => {
+        if (token !== swapN) return;
+        if (first || reduced) { build(); return; }
+        track.classList.add('swap');
+        swapT = setTimeout(() => { build(); requestAnimationFrame(() => track.classList.remove('swap')); resumeAt = performance.now() + 500; }, 380);
+      });
     }
     const stepBy = dir => { const c = row.querySelector('.car-card'); const w = c ? c.getBoundingClientRect().width + 14 : 280;
       if (reduced) { x += dir * w; place(); return; }
@@ -161,7 +169,8 @@
       if (nudge) { const k = Math.min(1, (now - nudge.t0) / 450), e = 1 - Math.pow(1 - k, 3); x = nudge.from + (nudge.to - nudge.from) * e; if (k >= 1) nudge = null; v = 0; }
       else if (!drag) {
         const target = hovering || now < resumeAt || reduced ? 0 : SPEED;
-        v += (target - v) * Math.min(1, dt * 3.5); // ease in and out instead of snapping
+        const k = Math.abs(v) > SPEED * 1.5 ? 2.2 : 1.6; // friction for flings, softer ease for cruising
+        v += (target - v) * (1 - Math.exp(-dt * k)); // frame-rate independent ease
         const before = x; x += v * dt;
         if (setW && x >= setW) { loops++; }
         if (setW && before < setW && x >= setW && loops >= 1 && real.length > 1) { place(); show(cur + 1); }
@@ -171,12 +180,18 @@
     }
     const kick = () => { if (!raf && visible) { last = 0; raf = requestAnimationFrame(frame); } };
     // Drag / swipe
-    track.addEventListener('pointerdown', e => { drag = { x0: e.clientX, y0: e.clientY, start: x, id: e.pointerId, lock: null }; moved = 0; nudge = null; });
+    track.addEventListener('pointerdown', e => { drag = { x0: e.clientX, y0: e.clientY, start: x, id: e.pointerId, lock: null, samples: [[performance.now(), x]] }; moved = 0; nudge = null; });
     track.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
       if (drag.lock == null && Math.abs(dx) + Math.abs(dy) > 6) drag.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-      if (drag.lock === 'x') { moved = Math.abs(dx); x = drag.start - dx; place(); if (e.pointerType !== 'touch') track.setPointerCapture?.(drag.id); }
+      if (drag.lock === 'x') { moved = Math.abs(dx); x = drag.start - dx; place(); const t = performance.now(); drag.samples.push([t, x]); while (drag.samples.length > 2 && t - drag.samples[0][0] > 100) drag.samples.shift(); if (e.pointerType !== 'touch') track.setPointerCapture?.(drag.id); }
       if (drag.lock === 'y') drag = null; });
-    const endDrag = () => { if (!drag) return; drag = null; v = 0; resumeAt = performance.now() + 1800; kick(); };
+    const endDrag = () => { if (!drag) return;
+      // Keep the swipe's momentum and let it glide down smoothly instead of stopping dead.
+      const sm = drag.samples, a = sm[0], b = sm[sm.length - 1], dtS = (b[0] - a[0]) / 1000;
+      const fling = drag.lock === 'x' && dtS > 0.01 && performance.now() - b[0] < 80 ? (b[1] - a[1]) / dtS : 0;
+      drag = null; v = Math.max(-2600, Math.min(2600, fling)); resumeAt = performance.now() + (Math.abs(v) > 200 ? 900 : 1400); kick(); };
+    // Trackpad / shift-wheel side scrolling moves the strip too.
+    track.addEventListener('wheel', e => { if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; e.preventDefault(); nudge = null; x += e.deltaX; v = 0; resumeAt = performance.now() + 1200; place(); kick(); }, { passive: false });
     ['pointerup', 'pointercancel'].forEach(ev => track.addEventListener(ev, endDrag));
     track.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') hovering = true; });
     track.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') hovering = false; endDrag(); kick(); });

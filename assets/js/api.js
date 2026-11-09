@@ -195,7 +195,7 @@
           { id: SVC.first, name: 'First Time Haircut', description: 'Your first cut with Miguel. Fade, taper, lineup or scissor cut, up to 40 minutes.', is_addon: false, duration_min: 40, price: 25, new_client_price: null, first_visit_only: true, bookable: true, active: true, sort: 0 },
           { id: SVC.cut, name: 'Returning Client Haircut', description: 'Welcome back. Fade, taper, lineup or scissor cut, up to 40 minutes.', is_addon: false, duration_min: 40, price: 30, new_client_price: null, first_visit_only: false, bookable: true, active: true, sort: 1 },
           { id: SVC.beard, name: 'Beard', description: 'Shape-up and lineup on the beard.', is_addon: true, duration_min: 0, price: 5, new_client_price: null, bookable: true, active: true, sort: 10 },
-          { id: SVC.design, name: 'Design', description: 'Part, line or custom design.', is_addon: true, duration_min: 0, price: 5, new_client_price: null, bookable: true, active: true, sort: 11 },
+          { id: SVC.design, name: 'Design', description: 'Part, line or custom design.', is_addon: true, duration_min: 0, price: 5, new_client_price: null, bookable: false, active: false, sort: 11 },
           { id: SVC.touch, name: 'Touch-up', description: 'Small fixes after your appointment. Always free. Text to set it up.', is_addon: false, duration_min: 15, price: 0, new_client_price: null, bookable: false, active: true, sort: 20 },
           { id: SVC.home, name: 'Hometown Haircut', description: 'For clients back home in the DMV (DC / Virginia). Book a day Miguel is in town.', is_addon: false, duration_min: 40, price: 25, new_client_price: null, first_visit_only: false, bookable: true, active: true, sort: 2 },
         ],
@@ -235,7 +235,7 @@
       const methods = ['cash', 'cash', 'venmo', 'venmo', 'zelle', 'cashapp', 'apple_pay'];
       const seen = new Set();
       const mk = (client, day, time, status, staff = STAFF) => {
-        const start = T.zoned(day, time); const addons = rnd() < 0.25 ? [SVC.beard] : (rnd() < 0.1 ? [SVC.design] : []);
+        const start = T.zoned(day, time); const addons = rnd() < 0.25 ? [SVC.beard] : [];
         const isNew = !seen.has(client.id); const price = (isNew ? 25 : 30) + addons.length * 5;
         const a = { id: uuid(), client_id: client.id, staff_id: staff, service_id: isNew ? SVC.first : SVC.cut, addon_ids: addons, starts_at: start.toISOString(), ends_at: new Date(+start + 40 * 6e4).toISOString(), status, price, new_client: isNew, source: rnd() < 0.5 ? 'online' : 'booksy', client_message: '', internal_note: '', manage_token: uuid(), reminder_sent_at: null, confirmed_at: status === 'confirmed' ? now.toISOString() : null, completed_at: status === 'completed' ? new Date(+start + 40 * 6e4).toISOString() : null, cancelled_at: status === 'cancelled' ? start.toISOString() : null, cancelled_by: status === 'cancelled' ? 'client' : null, cancel_reason: '', created_by: null, created_at: new Date(+start - 3 * 864e5).toISOString() };
         if (status === 'completed') { seen.add(client.id); const tip = pick([0, 0, 5, 5, 10, 3, 0, 7]); d.payments.push({ id: uuid(), appointment_id: a.id, client_id: client.id, amount: price, tip, method: pick(methods), note: '', paid_at: a.completed_at, recorded_by: 'demo-owner' }); }
