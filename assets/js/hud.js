@@ -1,6 +1,9 @@
 // Hologram barber pole in the hero. One canvas draws a full pole (finial, dome, collars,
-// glass tube with spiral stripes, tapered base) in the logo gold, with slow, calm motion:
-// the stripes turn gently, a few cut names drift around it, and a soft scan line passes now and then.
+// glass tube with spiral stripes, tapered base) in the logo gold, with calm motion.
+// Signature feature: like a real shop pole, it turns when the chair is open. It reads Miguel's
+// real next opening from the booking calendar (site.js sends 'lc:next'): an open slot today or
+// tomorrow spins it at full speed with a live 'CHAIR OPEN' readout; booked up slows it to a crawl.
+// Tapping the pole grabs that opening.
 (() => {
   const root = document.getElementById('hudGlobe'); if (!root) return;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -11,12 +14,24 @@
   const col = (getComputedStyle(hero).getPropertyValue('--holo').trim() || '232 205 130').split(/\s+/).join(',');
   const C = a => `rgba(${col},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
   const ease = (dt, k) => 1 - Math.exp(-dt * k);
-  const WORDS = ['Taper fades', 'Burst fades', 'Modern mullets', 'Scissor work', 'Curly hair', 'Free Touch-Ups'];
+  const WORDS = ['Taper fades', 'Burst fades', 'Modern mullets', 'Free Touch-Ups'];
+  // live chair status from the booking calendar
+  let live = { state: 'wait', top: 'CHECKING THE CHAIR', bot: '' }, gPower = .7, power = .7;
+  const onNext = d => {
+    if (d.full) { live = { state: 'full', top: 'BOOKED UP', bot: d.note || 'JOIN THE LIST' }; gPower = .25; }
+    else if (d.at) {
+      const ms = new Date(d.at) - Date.now(), soon = ms < 36 * 36e5;
+      live = { state: 'open', top: soon ? 'CHAIR OPEN' : 'NEXT CHAIR', bot: `${d.when} · ${d.time}`.toUpperCase(), soon }; gPower = soon ? 1 : .65;
+    }
+    root.style.cursor = live.state === 'open' ? 'pointer' : '';
+    if (!raf) draw(0);
+  };
+  addEventListener('lc:next', e => onNext(e.detail || {}));
 
-  // Motion, all deliberately slow.
-  const STRIPE_SPEED = 16;  // degrees per second the stripes turn
-  const ORBIT_SPEED = 5;    // degrees per second the words drift
-  const SCAN_PERIOD = 9;    // seconds per scan line pass
+  // Motion, calm but alive.
+  const STRIPE_SPEED = 22;  // degrees per second the stripes turn
+  const ORBIT_SPEED = 7;    // degrees per second the words drift
+  const SCAN_PERIOD = 8;    // seconds per scan line pass
 
   let W = 0, H = 0, dpr = Math.min(fine ? 2 : 1.5, devicePixelRatio || 1);
   const size = () => { const c = cv.getBoundingClientRect(); W = c.width; H = c.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(0); };
@@ -38,7 +53,7 @@
   };
 
   function draw(dt) {
-    if (!reduce) { spd += (1 - spd) * ease(dt, .9); t += dt; stripe += dt * STRIPE_SPEED * spd; orbit += dt * ORBIT_SPEED * spd; }
+    if (!reduce) { spd += (1 - spd) * ease(dt, .9); t += dt; power += (gPower - power) * ease(dt, .6); stripe += dt * STRIPE_SPEED * spd * power; orbit += dt * ORBIT_SPEED * spd; }
     const k = ease(dt, 1.6); tilt += (gTilt - tilt) * k; lean += (gLean - lean) * k;
     ctx.clearRect(0, 0, W, H);
     const S = Math.min(W, H), cx = W / 2 + lean, e = tilt;
@@ -51,17 +66,14 @@
     halo.addColorStop(0, C(.10 * breathe)); halo.addColorStop(1, C(0));
     ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
 
-    // floor ring under the pole
-    const fy = tubeBot + S * .19;
-    ctx.lineWidth = 1; ctx.strokeStyle = C(.18); ring(cx, fy, r * 3.2, e * .9, true); ctx.stroke(); ring(cx, fy, r * 3.2, e * .9, false); ctx.stroke();
-    ctx.strokeStyle = C(.1); ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.ellipse(cx, fy, r * 4.2, r * 4.2 * e * .9, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    const fy = tubeBot + S * .17; // where the light under the pole fades out
+
 
     // words behind the pole
     const orbitY = H * .5, orbitR = r * 3.4, items = WORDS.map((w, i) => { const a = (orbit + i * 360 / WORDS.length) * RAD; return { w, x: cx + Math.sin(a) * orbitR, y: orbitY + Math.cos(a) * orbitR * e * 1.6 + (i % 2 ? -1 : 1) * S * .12, z: Math.cos(a) }; });
     const best = items.reduce((b, it) => (it.z > b.z ? it : b), items[0]);
     const fs = Math.max(11, S * .03);
     items.filter(it => it.z < 0).forEach(it => glowText(it.w, it.x, it.y, .08 + .2 * (1 + it.z), fs, false));
-    ctx.strokeStyle = C(.12); ctx.lineWidth = 1; ring(cx, orbitY, orbitR, e * 1.6, false); ctx.stroke();
 
     // ---------- tube: back wall, stripes, glass ----------
     const N = 96, bands = 3, bandW = 46, turns = 2.4;
@@ -123,7 +135,7 @@
     ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(cx - cr, skY); ctx.bezierCurveTo(cx - cr, skY + skH * .6, cx - r * .3, skY + skH * .8, cx - r * .14, skY + skH); ctx.lineTo(cx + r * .14, skY + skH); ctx.bezierCurveTo(cx + r * .3, skY + skH * .8, cx + cr, skY + skH * .6, cx + cr, skY); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = C(.55); ctx.stroke();
     ctx.fillStyle = C(.7); ctx.beginPath(); ctx.arc(cx, skY + skH + r * .22, r * .22, 0, TAU); ctx.fill();
-    // light beam down to the floor ring
+    // soft light fading below the pole
     const beam = ctx.createLinearGradient(0, skY + skH, 0, fy); beam.addColorStop(0, C(.18)); beam.addColorStop(1, C(0));
     ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(cx - r * .3, skY + skH + r * .4); ctx.lineTo(cx + r * .3, skY + skH + r * .4); ctx.lineTo(cx + r * 2.6, fy); ctx.lineTo(cx - r * 2.6, fy); ctx.closePath(); ctx.fill();
 
@@ -132,22 +144,28 @@
     const sl = ctx.createLinearGradient(cx - r * 1.6, 0, cx + r * 1.6, 0); sl.addColorStop(0, C(0)); sl.addColorStop(.5, C(sa)); sl.addColorStop(1, C(0));
     ctx.strokeStyle = sl; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - r * 1.6, sy); ctx.lineTo(cx + r * 1.6, sy); ctx.stroke();
 
-    // front half of the orbit ring and the words in front of the pole
-    ctx.strokeStyle = C(.28); ctx.lineWidth = 1; ring(cx, orbitY, orbitR, e * 1.6, true); ctx.stroke();
+    // words in front of the pole
     items.filter(it => it.z >= 0).sort((a, b) => a.z - b.z).forEach(it => glowText(it.w, it.x, it.y, .3 + .7 * it.z, fs, it === best && it.z > .8));
 
-    // readouts
-    ctx.fillStyle = C(.6); ctx.font = `600 ${Math.max(9, S * .022)}px Rajdhani, Archivo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
-    ctx.fillText('SLC  40.76° N  111.89° W', cx, neckY - S * .018 - ballR * 2 - S * .05);
-    ctx.fillText('LOPEZ CUTS · EST. 2022', cx, fy + S * .07);
-    if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+    // live chair readout: a status light over the finial, the opening under the base
+    const ls = v => { if ('letterSpacing' in ctx) ctx.letterSpacing = v; };
+    const open = live.state === 'open' && live.soon, blink = open ? .55 + .45 * Math.sin(t * 2.4) : .5;
+    const ty = neckY - S * .018 - ballR * 2 - S * .032;
+    ctx.font = `700 ${Math.max(10, S * .024)}px Rajdhani, Archivo, sans-serif`; ls((S * .006).toFixed(1) + 'px');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(live.top).width, lx = cx - tw / 2 - S * .022;
+    ctx.shadowColor = C(.9); ctx.shadowBlur = open ? 10 : 0; ctx.fillStyle = open ? `rgba(255,250,240,${blink.toFixed(3)})` : C(live.state === 'full' ? .35 : .55);
+    ctx.beginPath(); ctx.arc(lx, ty, S * .007, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = open ? 'rgba(255,250,240,.92)' : C(.7); ctx.fillText(live.top, cx + S * .006, ty);
+    if (live.bot) { ctx.font = `600 ${Math.max(9, S * .021)}px Rajdhani, Archivo, sans-serif`; ls((S * .004).toFixed(1) + 'px'); ctx.fillStyle = C(.62); ctx.fillText(live.bot, cx, fy + S * .02); }
+    ls('0px');
   }
 
   let visible = true, last = 0, raf = 0;
   const loop = now => { raf = 0; const dt = Math.min(.05, (now - (last || now)) / 1000); last = now; draw(dt); if (visible && !document.hidden && !reduce) raf = requestAnimationFrame(loop); else last = 0; };
   const kick = () => { if (!raf && visible && !document.hidden && !reduce) raf = requestAnimationFrame(loop); };
-  size(); addEventListener('resize', size); document.fonts?.ready.then(size);
+  root.addEventListener('click', () => { if (live.state === 'open') document.getElementById('nextBtn')?.click(); });
+  size(); if (window.LC_NEXT) onNext(window.LC_NEXT); addEventListener('resize', size); document.fonts?.ready.then(size);
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).observe(root);
   document.addEventListener('visibilitychange', kick);
   kick();
