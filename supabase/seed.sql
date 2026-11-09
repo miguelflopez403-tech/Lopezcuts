@@ -34,7 +34,6 @@ select * from (values
   ('Returning Client Haircut', 'Welcome back. Fade, taper, lineup or scissor cut, up to 40 minutes.', false, 40, 30.00, null, false, true, 1),
   ('Hometown Haircut', 'For clients back home in the DMV (DC / Virginia). Book a day Miguel is in town.', false, 40, 25.00, null, false, true, 2),
   ('Beard', 'Shape-up and lineup on the beard.', true, 0, 5.00, null, false, true, 10),
-  ('Design', 'Part, line or custom design.', true, 0, 5.00, null, false, true, 11),
   ('Touch-up', 'Small fixes after your appointment. Always free. Text to set it up.', false, 15, 0.00, null, false, false, 20)
 ) v(name, description, is_addon, duration_min, price, new_client_price, first_visit_only, bookable, sort)
 where not exists (select 1 from public.services);

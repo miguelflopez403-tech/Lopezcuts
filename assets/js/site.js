@@ -82,7 +82,7 @@
   }
 
   // ---------------- Portfolio ----------------
-  const LOOKS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Designs', 'Beards'];
+  const LOOKS = ['Fades', 'Tapers', 'Lineups', 'Curly', 'Beards'];
   function placeholderArt(i) {
     const cat = LOOKS[i % LOOKS.length];
     const g = {
