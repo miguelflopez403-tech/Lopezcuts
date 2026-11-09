@@ -418,3 +418,10 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
 .sched-open { width: 100%; border: 0; background: none; padding: 14px 16px; text-align: left; color: var(--muted); font-size: .88rem; cursor: pointer; }
 .sched-open:hover { color: var(--gold-text); background: var(--surface-2); }
 @media (max-width: 560px) { .sched-row { grid-template-columns: 64px minmax(0, 1fr) auto; padding: 12px; gap: 10px; } .sched-sum .btn { margin-left: 0; } }
+
+/* New booking button lives on Schedule and Calendar only; on phones the top bar
+   only stays pinned there, so it doesn't cover other pages. */
+#newBooking[hidden] { display: none !important; }
+@media (max-width: 860px) {
+  body:not([data-view="schedule"]):not([data-view="calendar"]) .top { position: static; }
+}

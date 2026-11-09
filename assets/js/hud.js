@@ -12,7 +12,7 @@
     [-52, ['Salt Lake', 'DMV', 'Salt Lake', 'DMV']],
     [-24, ['Taper fades', 'Lineups', 'Beards', 'Curly hair', 'Designs']],
     [0, ['Lopez Cuts', 'Burst fades', 'Scissor work', 'Mod cuts', 'Skin fades']],
-    [24, ['Modern mullets', 'Burst mullets', 'Tapers', '$0 touch-ups', 'Fades']],
+    [24, ['Modern mullets', 'Burst mullets', 'Tapers', 'Free Touch-Ups', 'Fades']],
     [52, ['Look good', 'Feel better', 'Look good', 'Feel better']],
   ];
   const items = [];

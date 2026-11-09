@@ -631,3 +631,16 @@ h2.split.go .w > span { transform: none; }
 .fit-go .ic { width: 15px; height: 15px; }
 .fit-row:hover .fit-go, .fit-row:focus-visible .fit-go { background: var(--gold); border-color: var(--gold); color: #17130a; transform: rotate(-45deg); }
 @media (max-width: 760px) { .fit-list { grid-template-columns: 1fr; } .fit-row { padding: 13px 2px; gap: 10px; } .fit-go { width: 30px; height: 30px; } }
+
+/* ---------- Top notice (Booksy / no open times) ---------- */
+.notice { background: linear-gradient(90deg, #b8963e, #e6c97a 50%, #b8963e); color: #17130a; text-align: center; font-size: .92rem; line-height: 1.4; padding: 9px 16px; }
+.notice b { font-weight: 700; }
+.notice a { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; white-space: nowrap; }
+/* Fully booked: booking buttons stay visible but can't be tapped */
+.is-full [data-book][aria-disabled="true"] { opacity: .55; cursor: not-allowed; pointer-events: none; }
+.is-full .fit-row[aria-disabled="true"] .fit-go { display: none; }
+.is-full .fit-row[aria-disabled="true"] .fit-p { font-size: 1rem; letter-spacing: .04em; }
+.nx-sub a { color: rgb(var(--holo, 232 205 130)); text-decoration: underline; text-underline-offset: 3px; }
+/* Hometown card: clean border like the other cards */
+.hometown { border: 1px solid var(--line); }
+.is-full .hero-links .link-btn[data-book] { display: none; }

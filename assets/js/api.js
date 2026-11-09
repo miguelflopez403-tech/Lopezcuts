@@ -85,6 +85,11 @@
     return {
       mode: 'live', ready,
       async rpc(name, args) { await ready; return q(sb.rpc(name, args || {})); },
+      async fn(name, body) {
+        await ready; const { data, error } = await sb.functions.invoke(name, { body: body || {} });
+        if (error) { let m = ''; try { m = (await error.context.json()).error; } catch { } throw new ApiError(m || `Couldn't reach ${name}. Is that function deployed in Supabase?`); }
+        return data;
+      },
       async list(table, o = {}) {
         await ready; const out = []; const page = 1000;
         for (let from = 0; ; from += page) {
@@ -400,6 +405,20 @@
         db.reviews.unshift({ id: uuid(), appointment_id: a.id, client_id: a.client_id, rating: p_rating, body: String(p_body || '').trim().slice(0, 1000), display_name: String(p_display_name || 'Client').trim().slice(0, 40), label: a.new_client ? 'First Time Client' : 'Returning Client', source: 'site', status: 'pending', reply: '', created_at: new Date().toISOString() });
         commit('reviews'); return { ok: true };
       },
+      login_lock_status() { return { locked_until: null }; },
+      report_failed_login() { return { locked_until: null }; },
+      submit_open_review({ p_rating, p_body, p_display_name, p_phone }) {
+        const name = String(p_display_name || '').trim().slice(0, 40), body = String(p_body || '').trim();
+        if (!(p_rating >= 1 && p_rating <= 5)) fail('Please choose 1 to 5 stars.');
+        if (name.length < 2) fail('Please add your name.');
+        if (body.length > 1000) fail('Please keep your review under 1,000 characters.');
+        if (/(https?:\/\/|www\.)/i.test(body)) fail('Please leave links out of your review.');
+        if (db.reviews.some(r => !r.appointment_id && r.source === 'site' && r.display_name.toLowerCase() === name.toLowerCase() && +new Date(r.created_at) > Date.now() - 864e5)) fail('Thanks! We already got a review from you today.');
+        const digits = String(p_phone || '').replace(/\D/g, '').slice(-10);
+        const c = digits.length === 10 ? db.clients.find(x => String(x.phone || '').replace(/\D/g, '').slice(-10) === digits && db.appointments.some(a => a.client_id === x.id && a.status === 'completed')) : null;
+        db.reviews.unshift({ id: uuid(), appointment_id: null, client_id: c ? c.id : null, rating: p_rating, body, display_name: name, label: c ? 'Verified Client' : 'Client', source: 'site', status: 'pending', reply: '', created_at: new Date().toISOString() });
+        commit('reviews'); return { ok: true };
+      },
       staff_book({ p_client_id, p_name, p_phone, p_email, p_service_id, p_addon_ids, p_staff_id, p_starts_at, p_price, p_note, p_force, p_source }) {
         if (!isStaff()) fail('Not allowed.');
         if (!isAdmin() && p_staff_id !== me().staff_id) fail('You can only book on your own calendar.');
@@ -433,6 +452,7 @@
     return {
       mode: 'demo', ready: Promise.resolve(),
       async rpc(name, args) { await tick(); if (!RPC[name]) throw new ApiError('Unknown action ' + name); return clone(RPC[name](args || {})); },
+      async fn() { await tick(); throw new ApiError('Phone notifications only work on the live site, not in this preview.'); },
       async list(table, o = {}) {
         await tick(); guard(table, 'select');
         let rows = visible(table, db[table] || []);

@@ -4,6 +4,10 @@
   const { T, money, fmtPhone } = LC;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // Years of experience: started in 2022, goes up by one every January 1st (Salt Lake time).
+  const STARTED = 2022;
+  const yearsCutting = (+new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', year: 'numeric' }).format(new Date())) - STARTED;
+  $$('[data-years]').forEach(el => { if ('count' in el.dataset) { el.dataset.count = yearsCutting; el.textContent = yearsCutting + (el.dataset.suffix || ''); } else el.textContent = yearsCutting; });
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   function h(tag, attrs, ...kids) {
     const e = document.createElement(tag);
@@ -250,7 +254,7 @@
       $('.tag', feat).textContent = `Up to ${(back || first).duration_min} min`;
     }
     if (home) {
-      const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · ${home.duration_min} min`;
+      const hp = $('.ht-price'); if (hp) hp.textContent = `${money(home.price)} · up to ${home.duration_min} min`;
       const hb = $('#homeBook'); if (hb) { hb.dataset.svc = home.id; hb.textContent = 'Book a hometown cut'; }
       $$('[data-home]').forEach(x => { x.dataset.svc = home.id; });
     }
@@ -258,15 +262,52 @@
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
   }
 
+  // ---------------- Booksy notice + fully booked ----------------
+  // Until Thanksgiving 2026, clients still book on Booksy. From Nov 27 (Salt Lake time) this goes away on its own.
+  const BOOKSY_UNTIL = '2026-11-27', BOOKSY_URL = 'https://lopezcuts140.booksy.com/k';
+  const onBooksy = () => T.today() < BOOKSY_UNTIL;
+  const IG = 'https://instagram.com/lopezcuts.dmv';
+  function showNotice() {
+    const n = $('#siteNotice'); if (!n) return;
+    const parts = [];
+    if (onBooksy()) parts.push(h('span', {}, h('b', {}, 'Booking through Booksy until Thanksgiving.'), ' ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')));
+    else if (state.full) parts.push(h('span', {}, h('b', {}, 'No open times right now.'), ' Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list.'));
+    n.hidden = !parts.length; n.replaceChildren(...parts);
+  }
+  // When nothing is open, every booking button says Fully booked and can't be tapped.
+  function setFull(on) {
+    state.full = on; document.body.classList.toggle('is-full', on);
+    const st = $('#seeTimes'); if (st) st.hidden = on;  // only shown when there are open times
+    $$('[data-book]').forEach(b => {
+      if (on) {
+        if (!('origHtml' in b.dataset)) b.dataset.origHtml = b.innerHTML;
+        b.setAttribute('aria-disabled', 'true'); b.tabIndex = -1; if (b.tagName === 'BUTTON') b.disabled = true;
+        if (b.classList.contains('fit-row')) { const p = b.querySelector('.fit-p'); if (p) p.textContent = 'Fully booked'; }
+        else if (b.classList.contains('btn') || b.classList.contains('link-btn')) b.textContent = 'Fully booked';
+      } else if ('origHtml' in b.dataset) {
+        b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; b.removeAttribute('aria-disabled'); b.removeAttribute('tabindex'); if (b.tagName === 'BUTTON') b.disabled = false;
+      }
+    });
+    showNotice();
+  }
+  document.addEventListener('click', e => { if (state.full && e.target.closest('[data-book]')) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+
   // ---------------- Next opening ----------------
   async function nextOpening() {
     const staff = state.staff[0]; const cut = state.services.find(s => !s.is_addon && s.bookable);
+    showNotice();
     if (!staff || !cut) return;
-    if (state.settings && !state.settings.booking_open) { $('#nextWhen').textContent = 'Booking paused'; $('#nextSub').textContent = 'DM @lopezcuts.dmv to book'; return; }
+    const noTimes = () => {
+      setFull(true);
+      if (onBooksy()) { $('#nextWhen').textContent = 'Booking on Booksy'; $('#nextSub').replaceChildren('Until Thanksgiving. ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')); }
+      else { $('#nextWhen').textContent = 'No open times right now'; $('#nextSub').replaceChildren('Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list'); }
+    };
+    if (state.settings && !state.settings.booking_open) { noTimes(); return; }
     try {
-      const days = await LC.rpc('get_open_days', { p_staff_id: staff.id, p_from: T.today(), p_days: 14, p_duration: cut.duration_min });
+      const days = await LC.rpc('get_open_days', { p_staff_id: staff.id, p_from: T.today(), p_days: Math.min(90, +state.settings?.booking_window_days || 90), p_duration: cut.duration_min });
       const d = days.find(x => x.openings > 0);
-      if (!d) { $('#nextWhen').textContent = 'Fully booked'; $('#nextSub').textContent = 'Text to get on the waitlist'; return; }
+      if (!d) { noTimes(); return; }
+      setFull(false);
       const slots = await LC.rpc('get_available_slots', { p_staff_id: staff.id, p_day: d.day, p_duration: cut.duration_min });
       const s = slots[0]; if (!s) return;
       const rel = d.day === T.today() ? 'Today' : d.day === T.addDays(T.today(), 1) ? 'Tomorrow' : T.dayLabel(d.day, { weekday: 'long' });
@@ -412,7 +453,7 @@
         h('div', { class: 'row' }, h('span', {}, 'Service'), h('b', {}, svc().name + (B.addons.size ? ' + ' + addonList().filter(a => B.addons.has(a.id)).map(a => a.name).join(' + ') : ''))),
         h('div', { class: 'row' }, h('span', {}, 'Barber'), h('b', {}, (state.staff.find(s => s.id === B.staffId) || {}).display_name)),
         h('div', { class: 'row' }, h('span', {}, 'Price'), h('b', {}, svc().new_client_price != null ? `${money(+svc().new_client_price + addonsPrice())} if it's your first visit, ${money(+svc().price + addonsPrice())} if you've been before` : money(+svc().price + addonsPrice())))),
-      h('p', { class: 'muted small' }, `Pay at your appointment. Need to cancel? Use your booking link up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before, or text Miguel.`),
+      h('p', { class: 'muted small' }, `Pay at your appointment. Need to cancel? Use your booking link up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before, or reply to Miguel's text.`),
     ];
   }
   async function next() {
@@ -522,18 +563,33 @@
   // ---------------- Leave a review ----------------
   function openReview() {
     const past = pastBookings();
-    if (past.length === 1) { openManage(past[0].token); return; }
     B.step = 9; sheet.showModal(); header('Leave a review', 'Reviews', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
-    const inp = h('input', { id: 'reviewLink', placeholder: 'Paste your booking link', autocomplete: 'off' });
-    const recent = past.length ? [h('p', { class: 'opt-label' }, 'Your recent visits'), ...past.slice(0, 3).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('star'), `Review my ${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} cut`))] : [];
+    let rating = 5; const stars = h('div', { class: 'star-pick', role: 'radiogroup', 'aria-label': 'Rating' });
+    const paint = () => [...stars.children].forEach((b, i) => { b.classList.toggle('on', i < rating); b.setAttribute('aria-checked', String(i + 1 === rating)); });
+    for (let i = 1; i <= 5; i++) stars.append(h('button', { type: 'button', role: 'radio', 'aria-label': `${i} star${i > 1 ? 's' : ''}`, onclick: () => { rating = i; paint(); } }, icon('star')));
+    paint();
+    const text = h('textarea', { id: 'orBody', maxlength: '1000', placeholder: 'How was your cut?' });
+    const nm = h('input', { id: 'orName', maxlength: '40', autocomplete: 'name', placeholder: 'e.g. Jordan M.' });
+    const ph = h('input', { id: 'orPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: 'Optional' });
+    const send = h('button', { class: 'btn gold block', type: 'button' }, icon('star'), 'Post review');
+    send.onclick = async () => {
+      if (nm.value.trim().length < 2) { toast('Please add your name'); nm.focus(); return; }
+      send.disabled = true;
+      try {
+        await LC.rpc('submit_open_review', { p_rating: rating, p_body: text.value, p_display_name: nm.value, p_phone: ph.value });
+        body.replaceChildren(h('div', { class: 'step-anim' }, h('div', { class: 'done' }, h('div', { class: 'done-check' }, icon('check')), h('h3', {}, 'Thank you!'),
+          h('p', { class: 'muted' }, 'Your review will show up on the site once Miguel approves it.'),
+          h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => sheet.close() }, 'Done'))));
+      } catch (e) { toast(e.message || 'Something went wrong. Please try again.'); send.disabled = false; }
+    };
+    const recent = past.length ? [h('p', { class: 'opt-label' }, 'Your recent visits'), ...past.slice(0, 2).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('star'), `Review my ${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} cut`)), h('p', { class: 'opt-label' }, 'Or write one here')] : [];
     body.replaceChildren(h('div', { class: 'step-anim' },
-      h('p', { class: 'muted' }, 'Thanks for taking a minute! Reviews open once your cut is done and help other people find me.'),
-      ...recent,
-      h('p', { class: 'opt-label' }, past.length ? 'Or use your booking link' : 'Use your booking link'),
-      h('p', { class: 'muted small' }, 'It\'s in your booking confirmation and in Miguel\'s thank-you text. Tapping it opens the review form.'),
-      h('div', { class: 'field' }, h('label', { for: 'reviewLink' }, 'Booking link'), inp),
-      h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, icon('star'), 'Write my review'),
-      h('p', { class: 'muted small' }, 'Can\'t find it? Reply to Miguel\'s text and he\'ll send you a review link.')));
+      h('p', { class: 'muted' }, 'Thanks for taking a minute! Reviews help other people find me.'),
+      ...recent, stars,
+      h('div', { class: 'field' }, h('label', { for: 'orBody' }, 'Your review'), text),
+      h('div', { class: 'field' }, h('label', { for: 'orName' }, 'Name to show'), nm),
+      h('div', { class: 'field' }, h('label', { for: 'orPhone' }, 'Phone you booked with'), ph, h('p', { class: 'muted small' }, 'Optional. Marks you as a verified client. Never shown on the site.')),
+      send));
   }
   document.addEventListener('click', e => { const t = e.target.closest('[data-review]'); if (t) { e.preventDefault(); openReview(); } });
   if (location.hash === '#review') setTimeout(openReview, 0);

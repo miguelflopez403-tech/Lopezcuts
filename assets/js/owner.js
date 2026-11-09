@@ -74,6 +74,23 @@
       h('p', { class: 'hint' }, 'When it\'s live, this screen asks for an invited email, a password and a 6-digit code from an authenticator app.')));
   }
 
+  // Break-in protection: 3 wrong passwords or codes from one network = locked out for 1 hour.
+  // The database enforces the lock too; this screen just explains it.
+  async function lockedUntil() { if (LC.mode !== 'live') return null; try { const r = await LC.rpc('login_lock_status'); return r && r.locked_until && new Date(r.locked_until) > Date.now() ? new Date(r.locked_until) : null; } catch { return null; } }
+  async function reportFail(email, stage) {
+    if (LC.mode !== 'live') return false;
+    try { const r = await LC.rpc('report_failed_login', { p_email: email || '', p_stage: stage }); if (r && r.locked_until) { await LC.auth.signOut().catch(() => { }); showLocked(new Date(r.locked_until)); return true; } } catch { }
+    return false;
+  }
+  function showLocked(until) {
+    const left = h('b', {}); let t;
+    const tick = () => { const ms = until - Date.now(); if (ms <= 0) { clearInterval(t); location.reload(); return; } left.textContent = `${Math.floor(ms / 6e4)}m ${String(Math.floor(ms % 6e4 / 1e3)).padStart(2, '0')}s`; };
+    tick(); t = setInterval(tick, 1000);
+    showAuth(h('div', { class: 'stack' }, h('h2', {}, 'Locked for 1 hour'),
+      h('p', { class: 'muted' }, 'Too many wrong sign-in tries from this network. For safety, sign-in is paused here and the owner has been alerted.'),
+      h('p', {}, 'Try again in ', left, ` (at ${until.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}).`)));
+  }
+
   function showLogin(msg, mode = 'password') {
     const email = h('input', { id: 'lgEmail', type: 'email', autocomplete: 'username', required: true, placeholder: 'you@example.com' });
     const pw = h('input', { id: 'lgPass', type: 'password', autocomplete: 'current-password', placeholder: 'Password' });
@@ -81,10 +98,15 @@
     const btn = h('button', { class: 'btn gold block', type: 'submit' }, mode === 'password' ? 'Sign in' : 'Email me a sign-in link');
     const form = h('form', { class: 'stack', onsubmit: async e => {
       e.preventDefault(); btn.disabled = true; out.replaceChildren();
+      const lu = await lockedUntil(); if (lu) { showLocked(lu); return; }
       try {
-        if (mode === 'password') { await LC.auth.signInPassword(email.value.trim(), pw.value); await gate(); }
+        if (mode === 'password') { await LC.auth.signInPassword(email.value.trim(), pw.value); justSignedIn = true; await gate(); }
         else { await LC.auth.sendLink(email.value.trim()); out.replaceChildren(h('div', { class: 'okmsg' }, 'Check your email for a sign-in link. It works once and expires in an hour.')); }
-      } catch (err) { out.replaceChildren(h('div', { class: 'err' }, /Invalid login/i.test(err.message) ? 'Wrong email or password. First time? Use "Email me a sign-in link" and set a password after.' : err.message)); }
+      } catch (err) {
+        const bad = /Invalid login/i.test(err.message);
+        if (bad && await reportFail(email.value.trim(), 'password')) return;
+        out.replaceChildren(h('div', { class: 'err' }, bad ? 'Wrong email or password. After 3 wrong tries, sign-in is locked for 1 hour.' : err.message));
+      }
       finally { btn.disabled = false; }
     } },
       h('div', {}, h('h2', {}, 'Staff sign in'), h('p', { class: 'muted' }, 'Only people the owner has invited can sign in.')),
@@ -104,14 +126,14 @@
     const code = h('input', { id: 'mfaCode', class: 'code-input', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6', pattern: '[0-9]{6}', placeholder: '000000', required: true });
     const out = h('div', { 'aria-live': 'polite' });
     const btn = h('button', { class: 'btn gold block', type: 'submit' }, label);
-    const f = h('form', { class: 'stack', onsubmit: async e => { e.preventDefault(); btn.disabled = true; out.replaceChildren(); try { await onCode(code.value.trim()); } catch (err) { out.replaceChildren(h('div', { class: 'err' }, /invalid|expired/i.test(err.message) ? 'That code didn\'t work. Codes change every 30 seconds, so try the newest one.' : err.message)); code.select(); } finally { btn.disabled = false; } } },
+    const f = h('form', { class: 'stack', onsubmit: async e => { e.preventDefault(); btn.disabled = true; out.replaceChildren(); try { await onCode(code.value.trim()); } catch (err) { if (/invalid|expired/i.test(err.message) && await reportFail(ME?.email, 'code')) return; out.replaceChildren(h('div', { class: 'err' }, /invalid|expired/i.test(err.message) ? 'That code didn\'t work. Codes change every 30 seconds, so try the newest one. After 3 wrong tries, sign-in is locked for 1 hour.' : err.message)); code.select(); } finally { btn.disabled = false; } } },
       field('6-digit code from your authenticator app', code), out, btn);
     setTimeout(() => code.focus(), 50); return f;
   }
   function showMfaChallenge(factorId) {
     showAuth(h('div', { class: 'stack' },
       h('h2', {}, '2-step verification'), h('p', { class: 'muted' }, 'Open your authenticator app (Google Authenticator, 1Password, Authy…) and enter the code for Lopezcuts.'),
-      codeForm(async c => { await LC.auth.verify(factorId, c); enter(); }),
+      codeForm(async c => { await LC.auth.verify(factorId, c); justSignedIn = true; enter(); }),
       h('button', { class: 'btn ghost block', type: 'button', onclick: async () => { await LC.auth.signOut(); location.reload(); } }, 'Sign out')));
   }
   async function showMfaEnroll() {
@@ -136,6 +158,7 @@
   async function gate() {
     if (gating) return; gating = true;
     try {
+      const lu = await lockedUntil(); if (lu) { await LC.auth.signOut().catch(() => { }); return showLocked(lu); }
       const prof = await LC.auth.profile();
       if (!prof) return showLogin();
       if (!prof.role || prof.active === false) return showNoAccess(prof);
@@ -149,13 +172,32 @@
     finally { gating = false; }
   }
 
-  // Auto-lock after 30 minutes without activity (live mode).
-  let lastActive = Date.now();
-  ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, () => { lastActive = Date.now(); }, { passive: true, capture: true }));
-  setInterval(async () => {
-    if (LC.mode !== 'live' || !entered) return;
-    if (Date.now() - lastActive > 30 * 60 * 1000) { entered = false; await LC.auth.signOut(); showLogin('You were signed out after 30 minutes of inactivity.'); }
-  }, 60 * 1000);
+  // "Remember me" (owner only): this device stays signed in for 30 days instead of locking after 30 idle minutes.
+  const REM_KEY = 'lc-remember-until', REM_DAYS = 30;
+  const remembered = () => { try { return +localStorage.getItem(REM_KEY) > Date.now(); } catch { return false; } };
+  const setRemember = on => { try { on ? localStorage.setItem(REM_KEY, String(Date.now() + REM_DAYS * 864e5)) : localStorage.removeItem(REM_KEY); } catch { } };
+  let justSignedIn = false;
+  function offerRemember() {
+    if (!justSignedIn || LC.mode !== 'live' || ME?.role !== 'owner' || remembered()) return;
+    justSignedIn = false;
+    const close = modal('Remember me?', [
+      h('p', {}, 'Stay signed in on this device for 30 days for a quicker login next time. Only say yes on your own phone or computer.'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn gold', type: 'button', onclick: () => { setRemember(true); close(); toast('This device is remembered for 30 days'); } }, icon('check'), 'Remember me'),
+        h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Not now'))]);
+  }
+
+  // Auto-lock after 30 minutes without activity (live mode), unless this device is remembered.
+  // The last-active time is saved on the device, so closing and reopening the app doesn't skip the lock.
+  const IDLE_MS = 30 * 60 * 1000, LAST_KEY = 'lc-last-active';
+  const savedActive = () => { try { return +localStorage.getItem(LAST_KEY) || 0; } catch { return 0; } };
+  let lastActive = Date.now(), lastSaved = 0;
+  const touch = () => { lastActive = Date.now(); if (entered && lastActive - lastSaved > 15000) { lastSaved = lastActive; try { localStorage.setItem(LAST_KEY, String(lastActive)); } catch { } } };
+  ['pointerdown', 'keydown', 'scroll'].forEach(ev => addEventListener(ev, touch, { passive: true, capture: true }));
+  const idleTooLong = () => !remembered() && Date.now() - Math.max(lastActive, 0) > IDLE_MS;
+  async function idleLock() { entered = false; setRemember(false); await LC.auth.signOut(); showLogin('You were signed out after 30 minutes of inactivity.'); }
+  setInterval(() => { if (LC.mode === 'live' && entered && idleTooLong()) idleLock(); }, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && LC.mode === 'live' && entered && idleTooLong()) idleLock(); });
 
   // ===================================================================
   //  DATA
@@ -266,7 +308,7 @@
     await load();
     const want = location.hash.slice(1);
     UI.view = allowed().some(v => v.id === want) ? want : 'today';
-    renderNav(); render(); renderBanner();
+    renderNav(); render(); renderBanner(); lastSaved = 0; touch(); offerRemember();
     LC.realtime(p => {
       if (p.eventType === 'INSERT' && p.new?.source === 'online') toast(`New online booking: ${T.date(p.new.starts_at)} at ${T.time(p.new.starts_at)}`);
       refresh(['appointments', 'clients']);
@@ -290,12 +332,13 @@
       h('button', { class: 'btn sm block', type: 'button', onclick: signOut }, icon('out'), 'Sign out'));
     $('#topDate').textContent = T.date(new Date(), { weekday: 'long', month: 'long', day: 'numeric' });
   }
-  async function signOut() { entered = false; await LC.auth.signOut(); if (LC.mode === 'demo') showDemoLogin(); else location.reload(); }
+  async function signOut() { entered = false; setRemember(false); await LC.auth.signOut(); if (LC.mode === 'demo') showDemoLogin(); else location.reload(); }
   function go(id) { UI.view = id; try { history.replaceState(null, '', '#' + id); } catch { } renderNav(); render(); $('#view').focus({ preventScroll: true }); scrollTo(0, 0); }
   addEventListener('hashchange', () => { const id = location.hash.slice(1); if (entered && allowed().some(v => v.id === id) && id !== UI.view) go(id); });
   function render() {
     const v = allowed().find(x => x.id === UI.view) || VIEWS[0];
     $('#viewTitle').textContent = v.label;
+    $('#newBooking').hidden = !['schedule', 'calendar'].includes(v.id); document.body.dataset.view = v.id;
     try { $('#view').replaceChildren(...[v.render()].flat().filter(Boolean)); }
     catch (e) { console.error(e); $('#view').replaceChildren(h('div', { class: 'err' }, 'This page hit an error: ' + e.message)); }
   }
@@ -638,6 +681,16 @@
     let slotReq = 0;
     async function loadSlots() {
       if (B.walkIn) { slotBox.replaceChildren(h('p', { class: 'hint' }, 'Walk-in: the visit is logged starting now and checked out right away.')); return; }
+      if (B.anyTime) {
+        // Owner/manager squeeze-in: any day, any time, outside working hours. Only overlaps are blocked.
+        const taken = D.appointments.filter(a => a.staff_id === B.staffId && T.day(a.starts_at) === B.day && !['cancelled', 'no_show'].includes(a.status)).sort(by('starts_at'));
+        slotBox.replaceChildren(
+          h('div', { class: 'row' }, field('Day', dayIn), field('Start time', customIn)),
+          h('div', { class: 'f' }, taken.length ? 'Already booked that day' : 'Nothing booked that day',
+            taken.length ? h('div', { class: 'chips' }, taken.map(a => h('button', { class: 'chip', type: 'button', title: 'Start right after this one', onclick: () => { B.custom = T.hm(T.minutes(a.ends_at)); customIn.value = B.custom; } }, `${T.time(a.starts_at)}–${T.time(a.ends_at)} · ${client(a.client_id).full_name.split(' ')[0]}`))) : null),
+          h('p', { class: 'hint' }, taken.length ? 'Tap a booked time to start right after it. Your hours are ignored; it just can\'t overlap another cut.' : 'Your hours are ignored. Pick any start time.'));
+        return;
+      }
       const my = ++slotReq; slotBox.replaceChildren(h('div', { class: 'skel', style: 'height:60px' }));
       let slots = [];
       try { slots = await LC.rpc('get_available_slots_staff', { p_staff_id: B.staffId, p_day: B.day, p_duration: dur() }); } catch (e) { toast(e.message); }
@@ -647,14 +700,23 @@
         field('Day', dayIn),
         h('div', { class: 'f' }, slots.length ? `Open times (${slots.length})` : 'No open times that day',
           slots.length ? h('div', { class: 'slots' }, slots.map(s => h('button', { class: 'slot', type: 'button', 'aria-pressed': String(B.slot === s), onclick: e => { B.slot = s; B.custom = ''; customIn.value = ''; $$('.slot', slotBox).forEach(x => x.setAttribute('aria-pressed', 'false')); e.currentTarget.setAttribute('aria-pressed', 'true'); } }, T.time(s)))) : null),
-        isAdmin() ? field('Or a custom time', customIn, 'Books even outside working hours. Double bookings are still blocked.') : null);
+        isAdmin() ? h('button', { class: 'btn sm', type: 'button', onclick: () => setAny(true) }, icon('clock'), 'Squeeze someone in at any time') : null);
     }
-    const walk = h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'nbWalk', onchange: e => { B.walkIn = e.target.checked; payBox.hidden = !B.walkIn; submit.textContent = B.walkIn ? 'Log walk-in and check out' : 'Book appointment'; loadSlots(); } }), 'Walk-in, check out now');
+    const modeBox = h('div', { class: 'chips' });
+    function setAny(on) {
+      B.anyTime = on; B.slot = null; if (on && !B.custom) { B.custom = ''; customIn.value = ''; }
+      modeBox.replaceChildren(
+        h('button', { class: 'chip', type: 'button', 'aria-pressed': String(!on), onclick: () => setAny(false) }, 'Open times'),
+        h('button', { class: 'chip', type: 'button', 'aria-pressed': String(on), onclick: () => setAny(true) }, 'Any time (ignore my hours)'));
+      loadSlots();
+    }
+    const walk = h('label', { class: 'toggle' }, h('input', { type: 'checkbox', id: 'nbWalk', onchange: e => { B.walkIn = e.target.checked; payBox.hidden = !B.walkIn; modeBox.hidden = B.walkIn; submit.textContent = B.walkIn ? 'Log walk-in and check out' : 'Book appointment'; loadSlots(); } }), 'Walk-in, check out now');
     payBox.hidden = true;
     const submit = h('button', { class: 'btn gold block', type: 'button', onclick: async () => {
       err.replaceChildren();
       let start;
       if (B.walkIn) { const n = new Date(); n.setSeconds(0, 0); start = new Date(+n - dur() * 6e4); }
+      else if (B.anyTime && B.custom && isAdmin()) start = T.zoned(B.day, B.custom);
       else if (B.slot) start = new Date(B.slot);
       else if (B.custom && isAdmin()) start = T.zoned(B.day, B.custom);
       else { err.replaceChildren(h('div', { class: 'err' }, 'Pick a time.')); return; }
@@ -662,16 +724,16 @@
       if (!B.clientId && ph.value && !normPhone(ph.value)) { err.replaceChildren(h('div', { class: 'err' }, 'That phone number doesn\'t look right.')); return; }
       submit.disabled = true;
       try {
-        const id = await LC.rpc('staff_book', { p_client_id: B.clientId, p_name: nm.value.trim(), p_phone: ph.value, p_email: em.value, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: start.toISOString(), p_price: priceIn.value === '' ? null : +priceIn.value, p_note: noteIn.value, p_force: !!(B.custom && !B.slot && isAdmin()), p_source: B.walkIn ? 'walk_in' : 'manual' });
+        const id = await LC.rpc('staff_book', { p_client_id: B.clientId, p_name: nm.value.trim(), p_phone: ph.value, p_email: em.value, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: start.toISOString(), p_price: priceIn.value === '' ? null : +priceIn.value, p_note: noteIn.value, p_force: !!(isAdmin() && B.custom && (B.anyTime || !B.slot)), p_source: B.walkIn ? 'walk_in' : 'manual' });
         if (B.walkIn) await LC.rpc('complete_appointment', { p_id: id, p_amount: +priceIn.value || 0, p_tip: +tipIn.value || 0, p_method: methodSel.value, p_note: '' });
         modalEl.close(); toast(B.walkIn ? 'Walk-in logged' : `Booked ${T.date(start)} at ${T.time(start)}`);
         await refresh(['appointments', 'clients', 'payments', 'inventory']);
       } catch (e) { err.replaceChildren(h('div', { class: 'err' }, e.message)); }
       finally { submit.disabled = false; }
     } }, 'Book appointment');
-    paintClient(); paintSvc(); paintPrice();
-    modal('New booking', [clientBox, svcBox, walk, slotBox, h('div', { class: 'row' }, field('Price', priceIn, 'First-visit price applies to new clients'), field('Note', noteIn)), payBox, err, submit], { wide: true });
-    loadSlots();
+    paintClient(); paintSvc(); paintPrice(); if (isAdmin()) setAny(false);
+    modal('New booking', [clientBox, svcBox, walk, isAdmin() ? modeBox : null, slotBox, h('div', { class: 'row' }, field('Price', priceIn, 'First-visit price applies to new clients'), field('Note', noteIn)), payBox, err, submit], { wide: true });
+    if (!isAdmin()) loadSlots();
   }
 
   // ===================================================================
@@ -1082,7 +1144,7 @@
     return [
       h('div', { class: 'grid2', style: 'margin-bottom:18px' },
         h('section', { class: 'card' }, h('div', { class: 'big-rating' }, h('span', { class: 'n' }, avg.toFixed(1)), h('div', {}, h('div', { class: 'stars', style: 'color:var(--gold);letter-spacing:3px;font-size:1.2rem' }, '★★★★★'), h('div', { class: 'muted small' }, `${count} reviews: ${bc} on Booksy, ${site.length} on your site`))),
-          h('p', { class: 'hint', style: 'margin-top:10px' }, 'Clients can review from their booking link after a checked-out visit. New reviews wait here until you publish them.')),
+          h('p', { class: 'hint', style: 'margin-top:10px' }, 'Anyone can leave a review from the site. Ones marked Verified Client matched a phone number with a finished visit. New reviews wait here until you publish them.')),
         isAdmin() ? h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('h2', {}, 'Add a Booksy review')),
           h('div', { class: 'stack' }, h('div', { class: 'row' }, field('Name', nm), field('Type', lb), field('Rating', rt)), field('Review', tx),
             h('button', { class: 'btn dark', type: 'button', onclick: async () => { if (!nm.value.trim() || !tx.value.trim()) { toast('Add a name and the review text'); return; } await run(() => LC.insert('reviews', { rating: +rt.value, body: tx.value.trim(), display_name: nm.value.trim(), label: lb.value, source: 'booksy', status: 'published', reply: '' }), 'Added to the site'); refresh(['reviews']); } }, 'Add review'))) : null),
@@ -1155,10 +1217,93 @@
     const tabs = [
       isAdmin() && ['business', 'Business'], isAdmin() && ['services', 'Services & prices'], ['hours', 'Hours & time off'], isOwner() && ['team', 'Team & access'], ['security', 'My account'], isOwner() && ['activity', 'Activity log'],
     ].filter(Boolean);
-    tabs.splice(isAdmin() ? 2 : 0, 0, ...(isAdmin() ? [['texts', 'Texts']] : []));
+    tabs.splice(isAdmin() ? 2 : 0, 0, ...(isAdmin() ? [['texts', 'Texts']] : []), ['notify', 'Notifications']);
     if (!tabs.some(t => t[0] === UI.setupTab)) UI.setupTab = tabs[0][0];
-    const body = { business: setBusiness, texts: setTexts, services: setServices, hours: setHours, team: setTeam, security: setSecurity, activity: setActivity }[UI.setupTab]();
+    const body = { business: setBusiness, texts: setTexts, notify: setNotify, services: setServices, hours: setHours, team: setTeam, security: setSecurity, activity: setActivity }[UI.setupTab]();
     return [h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, l]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(UI.setupTab === k), onclick: () => { UI.setupTab = k; render(); } }, l))), body].flat();
+  }
+  // Phone notifications (web push). Each phone turns them on for itself.
+  function setNotify() {
+    const ua = navigator.userAgent;
+    const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+    const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    const can = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const device = () => ios ? (/iPad/.test(ua) || !/iPhone/.test(ua) ? 'iPad' : 'iPhone') : /Android/.test(ua) ? 'Android phone' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows computer' : 'device';
+    const u8 = b64 => { const p = '='.repeat((4 - b64.length % 4) % 4), s = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+    const status = h('div', { class: 'stack' }, h('p', { class: 'hint' }, 'Checking this device…'));
+    const devices = h('div', { class: 'stack' });
+    const err = h('p', { class: 'hint', style: 'color:var(--danger, #b3261e)', hidden: true });
+    const put = (...k) => { status.replaceChildren(...k.filter(Boolean)); status.append(err); };
+    const reg = () => navigator.serviceWorker.register('/owner-sw.js', { scope: '/owner' });
+    const mySub = async () => { if (!can) return null; const r = await navigator.serviceWorker.getRegistration('/owner'); return r ? r.pushManager.getSubscription() : null; };
+    const rows = async () => { try { return await LC.list('push_subscriptions', { order: 'created_at' }); } catch { return []; } };
+
+    async function turnOn(btn) {
+      btn.disabled = true; err.hidden = true; let step = 'asking for permission';
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') throw new Error(ios ? 'Allow notifications in iPhone Settings → Notifications → Lopezcuts.' : 'Notifications are blocked for this site. Click the icon left of the web address and allow Notifications.');
+        step = 'starting the notification helper'; const r = await reg(); await navigator.serviceWorker.ready;
+        step = 'reaching the notify-owner function'; const res = await LC.fn('notify-owner', { action: 'setup' });
+        if (!res || !res.publicKey) throw new Error('notify-owner answered without a key: ' + JSON.stringify(res).slice(0, 120));
+        step = 'subscribing this device'; let sub = await r.pushManager.getSubscription();
+        if (!sub) sub = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: u8(res.publicKey) });
+        const j = sub.toJSON();
+        step = 'saving this device'; await LC.rpc('save_push_subscription', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_device: device() });
+        toast('Notifications are on for this device');
+        LC.fn('notify-owner', { action: 'test' }).catch(() => { });
+      } catch (e) { console.error(e); err.textContent = `Didn't work while ${step}: ${e.message || e}`; err.hidden = false; }
+      finally { btn.disabled = false; await paint(); }
+    }
+    async function turnOff() {
+      const sub = await mySub(); if (!sub) return;
+      const ep = sub.endpoint; await sub.unsubscribe().catch(() => { });
+      await run(() => LC.remove('push_subscriptions', ep, 'endpoint'), 'Notifications are off for this device'); paint();
+    }
+    async function paint() {
+      const sub = await mySub().catch(() => null); const list = await rows();
+      const mine = sub && list.find(r => r.endpoint === sub.endpoint);
+      const tog = (row, key, label) => h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: !!row[key], onchange: async e => { await run(() => LC.update('push_subscriptions', row.id, { [key]: e.target.checked }), 'Saved'); } }), h('span', {}, label));
+      if (LC.mode === 'demo') put(h('p', { class: 'hint' }, 'This is the preview. On the live owner app, this is where you turn on booking alerts for your phone.'));
+      else if (ios && !installed) put(
+        h('p', {}, h('b', {}, 'First, add this page to your Home Screen.'), ' iPhones only allow notifications from apps on the Home Screen.'),
+        h('ol', { class: 'small', style: 'margin:0;padding-left:20px;line-height:1.7' }, h('li', {}, 'Open this page in Safari.'), h('li', {}, 'Tap the Share button (square with an arrow).'), h('li', {}, 'Tap Add to Home Screen, then Add.'), h('li', {}, 'Open Lopezcuts from your Home Screen, sign in, and come back here.')));
+      else if (!can) put(h('p', { class: 'hint' }, 'This browser can\'t show notifications. On iPhone, update to iOS 16.4 or newer and use the Home Screen app.'));
+      else if (mine && Notification.permission === 'granted') put(
+        h('p', {}, h('span', { class: 'pill confirmed' }, 'On'), ' This device gets notifications.'),
+        tog(mine, 'notify_bookings', 'Someone books online'), tog(mine, 'notify_cancels', 'A cancel or reschedule (yours or the client\'s)'),
+        tog(mine, 'notify_manual', 'I book someone myself'), tog(mine, 'notify_confirms', 'An appointment gets confirmed'),
+        h('p', { class: 'hint' }, 'Only client bookings and client cancels are also emailed. Everything else is device-only.'),
+        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test' })); if (r) toast(r.sent ? 'Test sent. Check this device in a few seconds.' : !r.devices ? 'This device isn\'t saved yet. Turn it off and on again.' : 'Not sent: ' + ((r.errors || [])[0] || 'unknown error')); } }, 'Send a test'),
+          h('button', { class: 'btn sm', type: 'button', onclick: turnOff }, 'Turn off on this device')));
+      else { const b = h('button', { class: 'btn gold', type: 'button' }, icon('check'), 'Turn on notifications'); b.onclick = () => turnOn(b);
+        put(h('p', {}, 'Get a notification on this device every time someone books with you.'), b,
+          Notification.permission === 'denied' ? h('p', { class: 'hint' }, ios ? 'Notifications are blocked. Turn them on in iPhone Settings → Notifications → Lopezcuts.' : 'Notifications are blocked for this site in your browser settings.') : null); }
+      const others = list.filter(r => !sub || r.endpoint !== sub.endpoint);
+      devices.replaceChildren(...(list.length ? list.map(r => h('div', { class: 'li' }, h('div', { class: 'main' }, h('div', { class: 't' }, r.device || 'Device', sub && r.endpoint === sub.endpoint ? ' (this one)' : ''),
+        h('div', { class: 's' }, `Added ${T.date(r.created_at, { month: 'short', day: 'numeric' })}${r.last_ok_at ? ' · last sent ' + T.date(r.last_ok_at, { month: 'short', day: 'numeric' }) : ''}`)),
+        others.includes(r) ? armBtn('Remove', async () => { await run(() => LC.remove('push_subscriptions', r.id), 'Removed'); paint(); }) : null)) : [h('div', { class: 'empty' }, 'No devices yet.')]));
+    }
+    paint();
+    return h('div', { class: 'grid2' },
+      h('section', { class: 'card stack' }, h('h2', {}, 'Notifications'), status),
+      h('section', { class: 'card stack' }, h('h2', {}, 'Your devices'), h('p', { class: 'hint' }, 'Turn notifications on from each phone or computer you use.'), devices),
+      isAdmin() ? emailCard() : null);
+  }
+  function emailCard() {
+    const s = S();
+    const em = h('input', { id: 'st_notifyEmail', type: 'email', value: s.notify_email ?? 'miguel@lopezcuts.com' });
+    const cb = (k, label) => { const i = h('input', { type: 'checkbox', checked: s[k] !== false }); return [i, h('label', { class: 'toggle' }, i, h('span', {}, label))]; };
+    const [b1, l1] = cb('email_bookings', 'Someone books online'), [b2, l2] = cb('email_cancels', 'A client cancels');
+    const save = async () => {
+      const v = em.value.trim().toLowerCase(); if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast('That email doesn\'t look right'); return; }
+      await run(() => LC.update('settings', 1, { notify_email: v, email_bookings: b1.checked, email_cancels: b2.checked, updated_at: new Date().toISOString() }), 'Saved'); refresh(['settings']);
+    };
+    const test = async () => { const r = await run(() => LC.fn('notify-owner', { action: 'test-email' })); if (r) toast(r.emailed === 'sent' ? 'Test email sent. Check your inbox.' : 'Email not sent: ' + r.emailed); };
+    return h('section', { class: 'card stack' }, h('h2', {}, 'Email alerts'),
+      h('p', { class: 'hint' }, 'Also get an email for each online booking.'),
+      field('Send to', em), l1, l2,
+      h('div', { class: 'row' }, h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save'), h('button', { class: 'btn sm', type: 'button', onclick: test }, 'Send a test email')));
   }
   function setTexts() {
     const s = S(); let mode = s.text_mode || 'manual';
@@ -1300,7 +1445,8 @@
       h('section', { class: 'card stack' }, h('h2', {}, 'Your account'),
         h('dl', { class: 'dl' }, h('dt', {}, 'Name'), h('dd', {}, ME.full_name || '—'), h('dt', {}, 'Email'), h('dd', {}, ME.email), h('dt', {}, 'Role'), h('dd', { style: 'text-transform:capitalize' }, ME.role), h('dt', {}, 'Chair'), h('dd', {}, staffName(ME.staff_id) || 'Not linked'),
           h('dt', {}, '2-step'), h('dd', {}, ME.role === 'employee' ? 'Optional for employees' : h('span', { class: 'pill confirmed' }, 'On'))),
-        h('p', { class: 'hint' }, 'You\'re signed out automatically after 30 minutes without activity.'),
+        remembered() ? h('p', { class: 'hint' }, 'This device is remembered, so you stay signed in. ', h('button', { class: 'link-btn', type: 'button', onclick: () => { setRemember(false); toast('This device will sign out after 30 idle minutes again'); render(); } }, 'Forget this device'))
+          : h('p', { class: 'hint' }, 'You\'re signed out automatically after 30 minutes without activity.', ME.role === 'owner' && LC.mode === 'live' ? [' ', h('button', { class: 'link-btn', type: 'button', onclick: () => { setRemember(true); toast('This device is remembered for 30 days'); render(); } }, 'Remember this device')] : null),
         h('button', { class: 'btn', type: 'button', style: 'justify-self:start', onclick: signOut }, icon('out'), 'Sign out')),
       h('section', { class: 'card stack' }, h('h2', {}, 'Set a password'), h('p', { class: 'hint' }, 'Use at least 10 characters. A password manager makes this easy.'),
         field('New password', p1), field('Type it again', p2), out,
@@ -1336,6 +1482,9 @@
       await LC.ready;
       const s = await LC.auth.session();
       if (!s) return LC.mode === 'demo' ? showDemoLogin() : showLogin();
+      // Reopened after 30+ idle minutes on a device that isn't remembered: sign in again.
+      const last = savedActive();
+      if (LC.mode === 'live' && !remembered() && last && Date.now() - last > IDLE_MS) { setRemember(false); await LC.auth.signOut(); return showLogin('You were signed out after 30 minutes of inactivity.'); }
       await gate();
     } catch (e) { showLogin(e.message); }
   })();

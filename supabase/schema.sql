@@ -787,6 +787,45 @@ begin
   return json_build_object('ok', true);
 end $$;
 
+-- Open reviews: anyone can leave a review from the website without a booking link.
+-- Every open review waits for the owner's approval before it shows on the site.
+-- If the phone number matches a client with a finished visit, it's marked as a verified client.
+create or replace function public.submit_open_review(p_rating int, p_body text, p_display_name text, p_phone text default '')
+returns json
+language plpgsql volatile security definer set search_path = public as $$
+declare v_name text := left(btrim(coalesce(p_display_name, '')), 40);
+        v_body text := btrim(coalesce(p_body, ''));
+        v_phone text := public.norm_phone(p_phone);
+        v_client uuid; v_label text := 'Client';
+begin
+  if p_rating is null or p_rating < 1 or p_rating > 5 then raise exception 'Please choose 1 to 5 stars.'; end if;
+  if length(v_name) < 2 then raise exception 'Please add your name.'; end if;
+  if length(v_body) > 1000 then raise exception 'Please keep your review under 1,000 characters.'; end if;
+  if v_body ~* '(https?://|www\.)' then raise exception 'Please leave links out of your review.'; end if;
+  -- spam guards: no repeats, and a cap on how many unapproved open reviews can pile up
+  if exists (select 1 from public.reviews where appointment_id is null and source = 'site'
+             and lower(display_name) = lower(v_name) and created_at > now() - interval '1 day') then
+    raise exception 'Thanks! We already got a review from you today.';
+  end if;
+  if (select count(*) from public.reviews where appointment_id is null and source = 'site' and status = 'pending'
+      and created_at > now() - interval '1 hour') >= 10 then
+    raise exception 'Lots of reviews coming in right now. Please try again in a bit.';
+  end if;
+  if v_phone is not null then
+    select c.id into v_client from public.clients c where c.phone = v_phone
+      and exists (select 1 from public.appointments a where a.client_id = c.id and a.status = 'completed');
+    if v_client is not null then
+      if exists (select 1 from public.reviews where client_id = v_client and created_at > now() - interval '7 days') then
+        raise exception 'Thanks! You already left a review this week.';
+      end if;
+      v_label := 'Verified Client';
+    end if;
+  end if;
+  insert into public.reviews (appointment_id, client_id, rating, body, display_name, label, source, status)
+  values (null, v_client, p_rating, v_body, v_name, v_label, 'site', 'pending');
+  return json_build_object('ok', true);
+end $$;
+
 -- =====================================================================
 --  Staff functions (each one checks the caller's role first)
 -- =====================================================================
@@ -1111,3 +1150,157 @@ create policy "portfolio admin update" on storage.objects for update to authenti
 drop policy if exists "portfolio admin delete" on storage.objects;
 create policy "portfolio admin delete" on storage.objects for delete to authenticated
   using (bucket_id = 'portfolio' and public.is_admin());
+
+-- ---------- Phone notifications (owner app) ----------
+
+-- Each phone that turned notifications on
+create table if not exists public.push_subscriptions (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references public.profiles (id) on delete cascade,
+  endpoint        text not null unique check (endpoint like 'https://%'),
+  p256dh          text not null,
+  auth            text not null,
+  device          text not null default '',
+  notify_bookings boolean not null default true,
+  notify_cancels  boolean not null default true,
+  last_ok_at      timestamptz,
+  created_at      timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists push_own_read on public.push_subscriptions;
+create policy push_own_read on public.push_subscriptions for select using (user_id = auth.uid());
+drop policy if exists push_own_upd on public.push_subscriptions;
+create policy push_own_upd on public.push_subscriptions for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists push_own_del on public.push_subscriptions;
+create policy push_own_del on public.push_subscriptions for delete using (user_id = auth.uid());
+revoke all on public.push_subscriptions from anon;
+revoke insert on public.push_subscriptions from authenticated;
+revoke update on public.push_subscriptions from authenticated;
+grant select, delete on public.push_subscriptions to authenticated;
+grant update (notify_bookings, notify_cancels, device) on public.push_subscriptions to authenticated;
+
+-- The sending keys. Only the notify-owner function (service role) can read them.
+create table if not exists public.push_keys (
+  id          int primary key check (id = 1),
+  public_key  text not null,
+  private_key text not null,
+  created_at  timestamptz not null default now()
+);
+alter table public.push_keys enable row level security;
+revoke all on public.push_keys from anon, authenticated;
+
+-- One notification per appointment per event, even if the webhook retries
+create table if not exists public.push_sent (
+  appointment_id uuid not null references public.appointments (id) on delete cascade,
+  kind           text not null,
+  sent_at        timestamptz not null default now(),
+  primary key (appointment_id, kind)
+);
+alter table public.push_sent enable row level security;
+revoke all on public.push_sent from anon, authenticated;
+
+-- Save this phone (signed-in team members only)
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_device text default '')
+returns uuid
+language plpgsql volatile security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  if not public.is_staff() then raise exception 'Not allowed.' using errcode = '42501'; end if;
+  if p_endpoint is null or p_endpoint not like 'https://%' or length(p_endpoint) > 1000 then raise exception 'That phone didn''t give a valid notification address.'; end if;
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, device)
+  values (auth.uid(), p_endpoint, left(p_p256dh, 200), left(p_auth, 100), left(coalesce(p_device, ''), 60))
+  on conflict (endpoint) do update set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, device = excluded.device
+  returning id into v_id;
+  return v_id;
+end $$;
+revoke execute on function public.save_push_subscription(text, text, text, text) from public, anon;
+grant execute on function public.save_push_subscription(text, text, text, text) to authenticated;
+
+
+-- ---------- Email alerts ----------
+alter table public.settings add column if not exists notify_email   text not null default 'miguel@lopezcuts.com';
+alter table public.settings add column if not exists email_bookings boolean not null default true;
+alter table public.settings add column if not exists email_cancels  boolean not null default true;
+
+-- ---------- Break-in protection (3 tries = 1 hour lock) ----------
+create table if not exists public.security_events (
+  id          bigint generated always as identity primary key,
+  at          timestamptz not null default now(),
+  ip          text not null default '',
+  email       text not null default '',
+  stage       text not null default 'password' check (stage in ('password', 'code')),
+  user_agent  text not null default '',
+  notified_at timestamptz
+);
+create index if not exists security_events_ip_at on public.security_events (ip, at desc);
+alter table public.security_events enable row level security;
+revoke all on public.security_events from anon, authenticated;
+drop policy if exists security_events_owner_read on public.security_events;
+create policy security_events_owner_read on public.security_events for select using (public.is_owner());
+grant select on public.security_events to authenticated;
+
+-- The visitor's internet address, as seen by Supabase
+create or replace function public.client_ip() returns text
+language sql stable as $$
+  select coalesce(nullif(btrim(split_part(
+    coalesce(current_setting('request.headers', true)::json ->> 'x-forwarded-for',
+             current_setting('request.headers', true)::json ->> 'cf-connecting-ip', ''), ',', 1)), ''), '')
+$$;
+
+-- When this address is locked until (null = not locked)
+create or replace function public.lock_until(p_ip text default null) returns timestamptz
+language sql stable security definer set search_path = public as $$
+  with f as (
+    select at from public.security_events
+     where ip = coalesce(p_ip, public.client_ip()) and ip <> '' and at > now() - interval '1 hour'
+     order by at desc limit 3)
+  select case when count(*) >= 3 then min(at) + interval '1 hour' end from f
+$$;
+
+create or replace function public.ip_locked() returns boolean
+language sql stable security definer set search_path = public as $$ select coalesce(public.lock_until() > now(), false) $$;
+
+-- The sign-in page calls this after a failed try. Returns when the lock ends, if locked.
+create or replace function public.report_failed_login(p_email text default '', p_stage text default 'password')
+returns json
+language plpgsql volatile security definer set search_path = public as $$
+declare v_ip text := public.client_ip(); v_ua text;
+begin
+  v_ua := left(coalesce(current_setting('request.headers', true)::json ->> 'user-agent', ''), 200);
+  -- cap the log at 20 entries per address per hour so it can't be flooded
+  if (select count(*) from public.security_events where ip = v_ip and at > now() - interval '1 hour') < 20 then
+    insert into public.security_events (ip, email, stage, user_agent)
+    values (v_ip, left(lower(btrim(coalesce(p_email, ''))), 120), case when p_stage = 'code' then 'code' else 'password' end, v_ua);
+  end if;
+  return json_build_object('locked_until', public.lock_until(v_ip));
+end $$;
+
+create or replace function public.login_lock_status() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object('locked_until', public.lock_until())
+$$;
+grant execute on function public.report_failed_login(text, text) to anon, authenticated;
+grant execute on function public.login_lock_status() to anon, authenticated;
+revoke execute on function public.lock_until(text) from public, anon, authenticated;
+
+-- A locked address sees nothing, even when signed in
+create or replace function public.has_role(variadic roles public.app_role[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid()
+      and p.active
+      and p.role = any (roles)
+      and (
+        p.role = 'employee'
+        or not public.mfa_required()
+        or coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
+      )
+  ) and not public.ip_locked();
+$$;
+
+
+-- ---------- Phone-only alerts: own bookings + confirmations ----------
+alter table public.push_subscriptions add column if not exists notify_manual   boolean not null default true;
+alter table public.push_subscriptions add column if not exists notify_confirms boolean not null default true;
+grant update (notify_bookings, notify_cancels, notify_manual, notify_confirms, device) on public.push_subscriptions to authenticated;
