@@ -605,6 +605,7 @@ h2.split.go .w > span { transform: none; }
 .hglobe { position: absolute; inset: 9%; perspective: 1600px; pointer-events: none; }
 .hglobe .g-in { position: absolute; inset: 0; transform-style: preserve-3d; }
 .hglobe span { position: absolute; left: 50%; top: 50%; white-space: nowrap; font: 600 var(--fs, 15px)/1 'Rajdhani', var(--body); letter-spacing: .26em; text-transform: uppercase; color: rgb(var(--holo)); text-shadow: 0 0 6px rgb(var(--holo) / 80%), 0 0 18px rgb(var(--holo) / 45%); will-change: transform, opacity; opacity: 0; }
+.hglobe span { will-change: transform, opacity; backface-visibility: hidden; transition: color .5s ease, text-shadow .5s ease; }
 .hglobe span.hot { color: #fffaf0; text-shadow: 0 0 6px rgb(var(--holo)), 0 0 22px rgb(var(--holo) / 80%), 0 0 40px rgb(var(--holo) / 40%); }
 @media (max-width: 900px) {
   .hero-grid { grid-template-columns: 1fr; position: relative; }
