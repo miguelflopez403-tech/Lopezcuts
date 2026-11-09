@@ -1,106 +1,160 @@
-// Hologram word globe in the hero. Words ride a slowly spinning 3D globe (CSS 3D),
-// and a canvas draws the wireframe, tick rings, scan line and the SLC / DMV readouts.
+// Hologram barber pole in the hero. One canvas draws a full pole (finial, dome, collars,
+// glass tube with spiral stripes, tapered base) in the logo gold, with calm motion.
+// Signature feature: like a real shop pole, it turns when the chair is open. It reads Miguel's
+// real next opening from the booking calendar (site.js sends 'lc:next'): an open slot today or
+// tomorrow spins it at full speed; booked up slows it to a crawl.
+// Tapping the pole grabs that opening.
 (() => {
   const root = document.getElementById('hudGlobe'); if (!root) return;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
-  const hero = root.closest('.hero'), inner = root.querySelector('.g-in'), cv = root.querySelector('canvas'), ctx = cv.getContext('2d');
-  const RAD = Math.PI / 180, P = 1600;
+  const hero = root.closest('.hero'), cv = root.querySelector('canvas'), ctx = cv.getContext('2d');
+  root.querySelector('.hglobe')?.remove();
+  const RAD = Math.PI / 180, TAU = Math.PI * 2;
   const col = (getComputedStyle(hero).getPropertyValue('--holo').trim() || '232 205 130').split(/\s+/).join(',');
-  const C = a => `rgba(${col},${a.toFixed(3)})`;
-  const rings = [
-    [-52, ['Salt Lake', 'DMV', 'Salt Lake', 'DMV']],
-    [-24, ['Taper fades', 'Lineups', 'Beards', 'Curly hair']],
-    [0, ['Lopez Cuts', 'Burst fades', 'Scissor work', 'Mod cuts', 'Skin fades']],
-    [24, ['Modern mullets', 'Burst mullets', 'Tapers', 'Free Touch-Ups', 'Fades']],
-    [52, ['Look good', 'Feel better', 'Look good', 'Feel better']],
-  ];
-  const items = [];
-  rings.forEach(([lat, words], ri) => words.forEach((w, k) => {
-    const s = document.createElement('span'); s.textContent = w; inner.append(s);
-    items.push({ s, lat, th: k * 360 / words.length + ri * 23, z: 0 });
-  }));
-
-  let R = 220, W = 0, H = 0, cx = 0, cy = 0, dpr = Math.min(fine ? 2 : 1.5, devicePixelRatio || 1);
-  const size = () => {
-    const g = inner.getBoundingClientRect(); R = g.width / 2;
-    root.style.setProperty('--fs', Math.max(11, R * .085) + 'px');
-    const c = cv.getBoundingClientRect(); W = c.width; H = c.height; cx = W / 2; cy = H / 2;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  };
-  size(); addEventListener('resize', size);
-  document.fonts?.ready.then(size);
-
-  let spin = 0, t = 0, tx = -14, ty = 0, gx = -14, gy = 0, spd = 0, hot = null;
+  const C = a => `rgba(${col},${Math.max(0, Math.min(1, a)).toFixed(3)})`;
   const ease = (dt, k) => 1 - Math.exp(-dt * k);
-  if (fine) {
-    hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); gx = -14 + ((e.clientY - r.top) / r.height - .5) * -14; gy = ((e.clientX - r.left) / r.width - .5) * 20; });
-    hero.addEventListener('pointerleave', () => { gx = -14; gy = 0; });
-  }
-  const proj = (la, lo, cX, sX, cZ, sZ) => {
-    const a = lo * RAD, l = la * RAD;
-    const x = Math.sin(a) * Math.cos(l) * R, y = -Math.sin(l) * R, z = Math.cos(a) * Math.cos(l) * R;
-    const x1 = x * cZ - y * sZ, y1 = x * sZ + y * cZ, y2 = y1 * cX - z * sX, z2 = y1 * sX + z * cX, k = P / (P - z2);
-    return [cx + x1 * k, cy + y2 * k, z2 / R];
-  };
-  const NB = 8, buckets = Array.from({ length: NB }, () => []);
-  const line = pts => { for (let i = 1; i < pts.length; i++) { const p0 = pts[i - 1], p1 = pts[i], f = (p0[2] + p1[2]) / 2;
-    buckets[f > 0 ? Math.min(NB - 1, 1 + Math.floor(f * (NB - 1))) : 0].push(p0[0], p0[1], p1[0], p1[1]); } };
-  const flush = () => { buckets.forEach((b, i) => { if (!b.length) return; ctx.strokeStyle = C(i ? .1 + .38 * (i / (NB - 1)) : .05); ctx.beginPath();
-    for (let j = 0; j < b.length; j += 4) { ctx.moveTo(b[j], b[j + 1]); ctx.lineTo(b[j + 2], b[j + 3]); } ctx.stroke(); b.length = 0; }); };
-
-  function frame(dt) {
-    if (!reduce) { spd += (8 - spd) * ease(dt, 1.2); spin += dt * spd; t += dt; }
-    const e = ease(dt, 2.4); tx += (gx - tx) * e; ty += (gy - ty) * e;
-    const rz = -8 + ty * .25;
-    inner.style.transform = `rotateX(${tx}deg) rotateZ(${rz}deg)`;
-    let best = null;
-    for (const it of items) {
-      const a = it.th + spin + ty; it.z = Math.cos(a * RAD) * Math.cos(it.lat * RAD);
-      it.s.style.transform = `translate(-50%,-50%) rotateY(${a}deg) rotateX(${it.lat}deg) translateZ(${R * 1.02}px)`;
-      const shimmer = .96 + .04 * Math.sin(t * 2.2 + it.th); // slow, soft shimmer instead of a fast flicker
-      const o = ((0.04 + 0.96 * Math.pow(Math.max(0, it.z), 1.6)) * shimmer).toFixed(2);
-      if (o !== it.o) { it.o = o; it.s.style.opacity = o; }
-      if (!best || it.z > best.z) best = it;
+  const WORDS = ['Taper fades', 'Burst fades', 'Modern mullets', 'Free Touch-Ups'];
+  // live chair status from the booking calendar
+  let live = { state: 'wait', top: 'CHECKING THE CHAIR', bot: '' }, gPower = .7, power = .7;
+  const onNext = d => {
+    if (d.full) { live = { state: 'full', top: 'BOOKED UP', bot: d.note || 'JOIN THE LIST' }; gPower = .25; }
+    else if (d.at) {
+      const ms = new Date(d.at) - Date.now(), soon = ms < 36 * 36e5;
+      live = { state: 'open', top: soon ? 'CHAIR OPEN' : 'NEXT CHAIR', bot: `${d.when} · ${d.time}`.toUpperCase(), soon }; gPower = soon ? 1 : .65;
     }
-    if (best !== hot) { hot?.s.classList.remove('hot'); best.s.classList.add('hot'); hot = best; }
+    root.style.cursor = live.state === 'open' ? 'pointer' : '';
+    if (!raf) draw(0);
+  };
+  addEventListener('lc:next', e => onNext(e.detail || {}));
 
-    ctx.clearRect(0, 0, W, H); ctx.lineWidth = .8;
-    const cX = Math.cos(tx * RAD), sX = Math.sin(tx * RAD), cZ = Math.cos(rz * RAD), sZ = Math.sin(rz * RAD), step = fine ? 6 : 10;
-    for (let la = -60; la <= 60; la += 30) { const pts = []; for (let lo = 0; lo <= 360; lo += step) pts.push(proj(la, lo + spin + ty, cX, sX, cZ, sZ)); line(pts); }
-    for (let lo = 0; lo < 180; lo += 30) { const pts = []; for (let la = -90; la <= 270; la += step) pts.push(proj(la <= 90 ? la : 180 - la, (la <= 90 ? lo : lo + 180) + spin + ty, cX, sX, cZ, sZ)); line(pts); }
-    flush();
-    const g = ctx.createRadialGradient(cx, cy, R * .2, cx, cy, R * 1.15); g.addColorStop(0, C(.06)); g.addColorStop(.85, C(.03)); g.addColorStop(1, C(0));
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.15, 0, 6.283); ctx.fill();
-    ctx.strokeStyle = C(.45); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.283); ctx.stroke();
-    // tick ring
-    const rot = t * 6 * RAD; ctx.strokeStyle = C(.5);
-    for (const long of [false, true]) { ctx.globalAlpha = long ? 1 : .55; ctx.beginPath();
-      for (let d = 0; d < 360; d += 3) { if ((d % 30 === 0) !== long) continue; const a = d * RAD + rot, r1 = R * 1.12, r2 = r1 + (long ? R * .06 : R * .025);
-        ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); }
-      ctx.stroke(); }
-    ctx.globalAlpha = 1;
-    // counter-rotating arcs + dashed outer ring
-    ctx.lineWidth = 2; ctx.strokeStyle = C(.75); const r3 = R * 1.28, a0 = -t * 14 * RAD;
-    [[0, 50], [140, 175], [230, 300]].forEach(([s, e]) => { ctx.beginPath(); ctx.arc(cx, cy, r3, s * RAD + a0, e * RAD + a0); ctx.stroke(); });
-    ctx.lineWidth = 1; ctx.strokeStyle = C(.3); ctx.setLineDash([2, 6]); ctx.beginPath(); ctx.arc(cx, cy, R * 1.36, 0, 6.283); ctx.stroke(); ctx.setLineDash([]);
-    // scan line
-    const sp = (t * .22) % 1, sy = cy - R + sp * R * 2, half = Math.sqrt(Math.max(0, R * R - (sy - cy) ** 2)), sa = .7 * Math.sin(sp * Math.PI);
-    const sg = ctx.createLinearGradient(cx - half, 0, cx + half, 0); sg.addColorStop(0, C(0)); sg.addColorStop(.5, C(sa)); sg.addColorStop(1, C(0));
-    ctx.strokeStyle = sg; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - half, sy); ctx.lineTo(cx + half, sy); ctx.stroke(); ctx.lineWidth = .8;
-    // readouts
-    ctx.fillStyle = C(.75); ctx.font = `600 ${Math.max(9, R * .045)}px Rajdhani, Archivo, sans-serif`; ctx.textBaseline = 'middle'; ctx.textAlign = 'center'; ctx.strokeStyle = C(.45);
-    ctx.beginPath(); ctx.moveTo(cx, cy - R * 1.4); ctx.lineTo(cx, cy - R * 1.47); ctx.stroke();
-    ctx.fillText('SLC  40.76° N  111.89° W', cx, cy - R * 1.54);
-    ctx.fillStyle = C(.55 + .45 * Math.abs(Math.sin(t * 2))); ctx.fillText('● LIVE', cx + R * 1.18, cy - R * 1.18);
-    ctx.fillStyle = C(.75); ctx.beginPath(); ctx.moveTo(cx, cy + R * 1.4); ctx.lineTo(cx, cy + R * 1.47); ctx.stroke();
-    ctx.fillText('DMV  38.90° N  77.03° W', cx, cy + R * 1.54); ctx.textAlign = 'left';
+  // Motion, calm but alive.
+  const STRIPE_SPEED = 22;  // degrees per second the stripes turn
+  const ORBIT_SPEED = 7;    // degrees per second the words drift
+  const SCAN_PERIOD = 8;    // seconds per scan line pass
+
+  let W = 0, H = 0, dpr = Math.min(fine ? 2 : 1.5, devicePixelRatio || 1);
+  const size = () => { const c = cv.getBoundingClientRect(); W = c.width; H = c.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(0); };
+
+  let t = 0, spd = 0, stripe = 0, orbit = 0, tilt = .2, gTilt = .2, lean = 0, gLean = 0;
+  if (fine) {
+    hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); gTilt = .2 + ((e.clientY - r.top) / r.height - .5) * .08; gLean = ((e.clientX - r.left) / r.width - .5) * 6; });
+    hero.addEventListener('pointerleave', () => { gTilt = .2; gLean = 0; });
+  }
+
+  // Geometry helpers. A point on a vertical circle of radius r at height y and angle a:
+  // x = cx + r sin(a); y shifts by e*r*cos(a) because we look at the pole slightly from above.
+  const ring = (cx, y, r, e, front, a0 = 0, a1 = TAU) => { ctx.beginPath(); ctx.ellipse(cx, y, r, Math.max(.5, r * e), 0, front ? 0 : Math.PI, front ? Math.PI : TAU); };
+  const glowText = (txt, x, y, a, size, hot) => {
+    ctx.font = `600 ${size}px Rajdhani, Archivo, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if ('letterSpacing' in ctx) ctx.letterSpacing = (size * .22).toFixed(1) + 'px';
+    ctx.shadowColor = C(hot ? .8 : .5 * a); ctx.shadowBlur = hot ? 14 : 6; ctx.fillStyle = hot ? `rgba(255,250,240,${a.toFixed(3)})` : C(a);
+    ctx.fillText(txt.toUpperCase(), x, y); ctx.shadowBlur = 0; if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  };
+
+  function draw(dt) {
+    if (!reduce) { spd += (1 - spd) * ease(dt, .9); t += dt; power += (gPower - power) * ease(dt, .6); stripe += dt * STRIPE_SPEED * spd * power; orbit += dt * ORBIT_SPEED * spd; }
+    const k = ease(dt, 1.6); tilt += (gTilt - tilt) * k; lean += (gLean - lean) * k;
+    ctx.clearRect(0, 0, W, H);
+    const S = Math.min(W, H), cx = W / 2 + lean, e = tilt;
+    const r = S * .085;                       // tube radius
+    const tubeTop = H * .5 - S * .25, tubeBot = H * .5 + S * .25, tubeH = tubeBot - tubeTop;
+    const breathe = .9 + .1 * Math.sin(t * .5);
+
+    // soft halo behind the pole
+    const halo = ctx.createRadialGradient(cx, H / 2, r * .5, cx, H / 2, S * .42);
+    halo.addColorStop(0, C(.10 * breathe)); halo.addColorStop(1, C(0));
+    ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
+
+    const fy = tubeBot + S * .17; // where the light under the pole fades out
+
+
+    // words behind the pole
+    const orbitY = H * .5, orbitR = r * 3.4, items = WORDS.map((w, i) => { const a = (orbit + i * 360 / WORDS.length) * RAD; return { w, x: cx + Math.sin(a) * orbitR, y: orbitY + Math.cos(a) * orbitR * e * 1.6 + (i % 2 ? -1 : 1) * S * .12, z: Math.cos(a) }; });
+    const best = items.reduce((b, it) => (it.z > b.z ? it : b), items[0]);
+    const fs = Math.max(11, S * .03);
+    items.filter(it => it.z < 0).forEach(it => glowText(it.w, it.x, it.y, .08 + .2 * (1 + it.z), fs, false));
+
+    // ---------- tube: back wall, stripes, glass ----------
+    const N = 96, bands = 3, bandW = 46, turns = 2.4;
+    // inner back wall
+    ctx.fillStyle = C(.04); ctx.fillRect(cx - r, tubeTop, r * 2, tubeH);
+    // stripes as shaded quads, back faces first then front faces
+    const NB = 8, buckets = [Array.from({ length: NB }, () => []), Array.from({ length: NB }, () => [])];
+    for (let i = 0; i < N; i++) {
+      const y0 = tubeTop + tubeH * i / N, y1 = tubeTop + tubeH * (i + 1) / N;
+      for (let b = 0; b < bands; b++) {
+        const base = b * 360 / bands - stripe + (i / N) * turns * 360;
+        for (let s = 0; s < 3; s++) {
+          const a0 = (base + s * bandW / 3) * RAD, a1 = (base + (s + 1) * bandW / 3) * RAD, da = (turns * 360 / N) * RAD;
+          const z = Math.cos((a0 + a1) / 2 + da / 2), front = z > 0 ? 1 : 0;
+          const lit = front ? Math.pow(z, .7) : -z;
+          buckets[front][Math.min(NB - 1, Math.floor(lit * NB))].push([
+            cx + Math.sin(a0) * r, y0 + Math.cos(a0) * r * e, cx + Math.sin(a1) * r, y0 + Math.cos(a1) * r * e,
+            cx + Math.sin(a1 + da) * r, y1 + Math.cos(a1 + da) * r * e, cx + Math.sin(a0 + da) * r, y1 + Math.cos(a0 + da) * r * e]);
+        }
+      }
+    }
+    const rgb = col.split(',').map(Number), solid = l => `rgb(${rgb.map(v => Math.round(5 + (v - 5) * l)).join(',')})`; // opaque, so slices never double up
+    const fillBuckets = (list, lo, hi) => list.forEach((qs, bi) => { if (!qs.length) return; ctx.fillStyle = solid(lo + (hi - lo) * (bi / (NB - 1))); ctx.beginPath();
+      for (const q of qs) { ctx.moveTo(q[0], q[1]); ctx.lineTo(q[2], q[3]); ctx.lineTo(q[4], q[5]); ctx.lineTo(q[6], q[7]); ctx.closePath(); } ctx.fill(); ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = .7; ctx.stroke(); }); // the stroke hides hairline seams between slices
+    ctx.save(); ctx.beginPath(); ctx.rect(cx - r - 1, tubeTop, r * 2 + 2, tubeH); ctx.clip();
+    fillBuckets(buckets[0], .05, .16);
+    fillBuckets(buckets[1], .3, .95 * breathe);
+    ctx.restore();
+    // glass: side edges, cross-section rings, a highlight streak
+    ctx.lineWidth = 1.2; ctx.strokeStyle = C(.55);
+    ctx.beginPath(); ctx.moveTo(cx - r, tubeTop); ctx.lineTo(cx - r, tubeBot); ctx.moveTo(cx + r, tubeTop); ctx.lineTo(cx + r, tubeBot); ctx.stroke();
+    ctx.lineWidth = .8; ctx.strokeStyle = C(.12); for (let i = 1; i < 6; i++) { ring(cx, tubeTop + tubeH * i / 6, r, e, true); ctx.stroke(); }
+    const gl = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+    gl.addColorStop(0, 'rgba(255,250,240,0)'); gl.addColorStop(.22, 'rgba(255,250,240,.16)'); gl.addColorStop(.3, 'rgba(255,250,240,0)'); gl.addColorStop(.78, 'rgba(255,250,240,0)'); gl.addColorStop(.86, 'rgba(255,250,240,.07)'); gl.addColorStop(1, 'rgba(255,250,240,0)');
+    ctx.fillStyle = gl; ctx.fillRect(cx - r, tubeTop, r * 2, tubeH);
+
+    // ---------- collars, dome, finials, base ----------
+    const collar = (y, h, rr) => { // a metal band: back rim, body, front rim
+      const g = ctx.createLinearGradient(cx - rr, 0, cx + rr, 0); g.addColorStop(0, C(.18)); g.addColorStop(.35, C(.65)); g.addColorStop(.55, C(.35)); g.addColorStop(1, C(.15));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, y + h, rr, rr * e, 0, 0, Math.PI); ctx.lineTo(cx - rr, y); ctx.ellipse(cx, y, rr, rr * e, 0, Math.PI, 0, true); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = C(.75); ctx.lineWidth = 1; ring(cx, y, rr, e, true); ctx.stroke(); ring(cx, y, rr, e, false); ctx.stroke(); ring(cx, y + h, rr, e, true); ctx.stroke();
+    };
+    const ch = S * .028, cr = r * 1.22;
+    // top: collar, dome, neck, finial ball
+    collar(tubeTop - ch, ch, cr);
+    const domeH = S * .075, dg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
+    dg.addColorStop(0, C(.08)); dg.addColorStop(.35, C(.45)); dg.addColorStop(.6, C(.2)); dg.addColorStop(1, C(.06));
+    ctx.fillStyle = dg; ctx.beginPath(); ctx.moveTo(cx - cr, tubeTop - ch); ctx.bezierCurveTo(cx - cr, tubeTop - ch - domeH * .9, cx - cr * .35, tubeTop - ch - domeH, cx, tubeTop - ch - domeH); ctx.bezierCurveTo(cx + cr * .35, tubeTop - ch - domeH, cx + cr, tubeTop - ch - domeH * .9, cx + cr, tubeTop - ch); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C(.6); ctx.lineWidth = 1; ctx.stroke();
+    const neckY = tubeTop - ch - domeH, ballR = r * .42;
+    ctx.fillStyle = C(.5); ctx.fillRect(cx - r * .12, neckY - S * .018, r * .24, S * .018);
+    const bg = ctx.createRadialGradient(cx - ballR * .35, neckY - S * .018 - ballR * 1.35, ballR * .1, cx, neckY - S * .018 - ballR, ballR * 1.1);
+    bg.addColorStop(0, 'rgba(255,250,240,.95)'); bg.addColorStop(.35, C(.85)); bg.addColorStop(1, C(.15));
+    ctx.shadowColor = C(.7); ctx.shadowBlur = 16 * breathe; ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(cx, neckY - S * .018 - ballR, ballR, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+    // bottom: collar, tapered skirt, small ball
+    collar(tubeBot, ch, cr);
+    const skY = tubeBot + ch, skH = S * .06, sg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
+    sg.addColorStop(0, C(.06)); sg.addColorStop(.35, C(.4)); sg.addColorStop(.6, C(.18)); sg.addColorStop(1, C(.05));
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(cx - cr, skY); ctx.bezierCurveTo(cx - cr, skY + skH * .6, cx - r * .3, skY + skH * .8, cx - r * .14, skY + skH); ctx.lineTo(cx + r * .14, skY + skH); ctx.bezierCurveTo(cx + r * .3, skY + skH * .8, cx + cr, skY + skH * .6, cx + cr, skY); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = C(.55); ctx.stroke();
+    ctx.fillStyle = C(.7); ctx.beginPath(); ctx.arc(cx, skY + skH + r * .22, r * .22, 0, TAU); ctx.fill();
+    // soft light fading below the pole
+    const beam = ctx.createLinearGradient(0, skY + skH, 0, fy); beam.addColorStop(0, C(.18)); beam.addColorStop(1, C(0));
+    ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(cx - r * .3, skY + skH + r * .4); ctx.lineTo(cx + r * .3, skY + skH + r * .4); ctx.lineTo(cx + r * 2.6, fy); ctx.lineTo(cx - r * 2.6, fy); ctx.closePath(); ctx.fill();
+
+    // slow scan line over the tube
+    const sp = (t / SCAN_PERIOD) % 1, sy = tubeTop + sp * tubeH, sa = .5 * Math.pow(Math.sin(sp * Math.PI), 2);
+    const sl = ctx.createLinearGradient(cx - r * 1.6, 0, cx + r * 1.6, 0); sl.addColorStop(0, C(0)); sl.addColorStop(.5, C(sa)); sl.addColorStop(1, C(0));
+    ctx.strokeStyle = sl; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - r * 1.6, sy); ctx.lineTo(cx + r * 1.6, sy); ctx.stroke();
+
+    // words in front of the pole
+    items.filter(it => it.z >= 0).sort((a, b) => a.z - b.z).forEach(it => glowText(it.w, it.x, it.y, .3 + .7 * it.z, fs, it === best && it.z > .8));
+
   }
 
   let visible = true, last = 0, raf = 0;
-  const loop = now => { raf = 0; const dt = Math.min(.05, (now - (last || now)) / 1000); last = now; frame(dt); if (visible && !document.hidden && !reduce) raf = requestAnimationFrame(loop); else last = 0; };
-  const kick = () => { if (!raf && visible && !document.hidden) raf = requestAnimationFrame(loop); };
+  const loop = now => { raf = 0; const dt = Math.min(.05, (now - (last || now)) / 1000); last = now; draw(dt); if (visible && !document.hidden && !reduce) raf = requestAnimationFrame(loop); else last = 0; };
+  const kick = () => { if (!raf && visible && !document.hidden && !reduce) raf = requestAnimationFrame(loop); };
+  root.addEventListener('click', () => { if (live.state === 'open') document.getElementById('nextBtn')?.click(); });
+  size(); if (window.LC_NEXT) onNext(window.LC_NEXT); addEventListener('resize', size); document.fonts?.ready.then(size);
   if ('IntersectionObserver' in window) new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).observe(root);
   document.addEventListener('visibilitychange', kick);
-  frame(0); kick();
+  kick();
 })();

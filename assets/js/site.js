@@ -313,7 +313,7 @@
     showNotice();
     if (!staff || !cut) return;
     const noTimes = () => {
-      setFull(true);
+      setFull(true); window.LC_NEXT = { full: true }; dispatchEvent(new CustomEvent('lc:next', { detail: window.LC_NEXT }));
       if (onBooksy()) { $('#nextWhen').textContent = 'Booking on Booksy'; $('#nextSub').replaceChildren('Until Thanksgiving. ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')); }
       else { $('#nextWhen').textContent = 'No open times right now'; $('#nextSub').replaceChildren('Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list'); }
     };
@@ -336,6 +336,7 @@
         const th = dd * 24 + hh; cd.textContent = th >= 48 ? `${dd} days` : th ? `${th}h ${String(mm).padStart(2, '0')}m` : `${mm}m ${String(ss).padStart(2, '0')}s`; };
       tick(); clearInterval(nextOpening.t); nextOpening.t = setInterval(tick, 1000);
       const btn = $('#nextBtn'); btn.dataset.slot = s; btn.dataset.day = d.day;
+      window.LC_NEXT = { at: s, when: rel, time: T.time(s) }; dispatchEvent(new CustomEvent('lc:next', { detail: window.LC_NEXT }));
       btn.replaceChildren(`Grab ${T.time(s)}`, icon('arrow'));
     } catch (e) { $('#nextWhen').textContent = 'Book online'; $('#nextSub').textContent = 'See all open times'; }
   }
