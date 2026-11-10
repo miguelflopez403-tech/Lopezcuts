@@ -9,6 +9,7 @@
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const fine = matchMedia('(hover: hover) and (pointer: fine)').matches;
   const hero = root.closest('.hero'), cv = root.querySelector('canvas'), ctx = cv.getContext('2d');
+  root.querySelector('.hglobe')?.remove();
   const RAD = Math.PI / 180, TAU = Math.PI * 2;
   const col = (getComputedStyle(hero).getPropertyValue('--holo').trim() || '232 205 130').split(/\s+/).join(',');
   const C = a => `rgba(${col},${Math.max(0, Math.min(1, a)).toFixed(3)})`;

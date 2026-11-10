@@ -568,7 +568,7 @@ h2.split.go .w > span { transform: none; }
 .car-row .car-card img { pointer-events: none; }
 
 
-/* ---------- Hero: hologram barber pole ---------- */
+/* ---------- Hero: hologram globe (H1) ---------- */
 .hero { --holo: 232 205 130; background: radial-gradient(50% 70% at 78% 46%, rgb(var(--holo) / 9%), transparent 70%), #050506; }
 .hero::before { background: radial-gradient(700px 400px at 0% 100%, rgb(210 180 106 / 6%), transparent 60%); }
 .hero::after { display: none; }
@@ -643,3 +643,10 @@ h2.split.go .w > span { transform: none; }
 .hometown { border: 1px solid var(--line); }
 .is-full .hero-links .link-btn[data-book] { display: none; }
 
+/* Opening animation (assets/js/intro.js): full-screen, once per visit, tap to skip */
+html.intro-on { overflow: hidden; }
+.intro { position: fixed; inset: 0; z-index: 1000; background: #050505; transition: opacity .6s ease; cursor: pointer; }
+.intro canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.intro.out { opacity: 0; pointer-events: none; }
+.intro-skip { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); font: 600 .78rem/1 Rajdhani, Archivo, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #d2b46a; background: transparent; border: 1px solid rgb(210 180 106 / 40%); border-radius: 999px; padding: 10px 16px; cursor: pointer; }
+.intro-skip:focus-visible { outline: 2px solid #f3efe6; outline-offset: 2px; }
