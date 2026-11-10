@@ -36,6 +36,7 @@
   let W = 0, H = 0, dpr = Math.min(fine ? 2 : 1.5, devicePixelRatio || 1);
   const size = () => { const c = cv.getBoundingClientRect(); W = c.width; H = c.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(0); };
 
+  const GLINTS = Array.from({ length: 16 }, () => ({ y: Math.random(), a: Math.random() * TAU, s: .05 + Math.random() * .07 }));
   let t = 0, spd = 0, stripe = 0, orbit = 0, tilt = .2, gTilt = .2, lean = 0, gLean = 0;
   if (fine) {
     hero.addEventListener('pointermove', e => { const r = hero.getBoundingClientRect(); gTilt = .2 + ((e.clientY - r.top) / r.height - .5) * .08; gLean = ((e.clientX - r.left) / r.width - .5) * 6; });
@@ -67,6 +68,20 @@
     ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
 
     const fy = tubeBot + S * .17; // where the light under the pole fades out
+    const ch = S * .028, cr = r * 1.22, domeH = S * .075, neckY = tubeTop - ch - domeH, ballR = r * .42, ballY = neckY - S * .018 - ballR;
+    const skY = tubeBot + ch, skH = S * .06, footY = skY + skH + r * .44;
+
+    // slow light rays from the finial, brighter when the chair is open
+    ctx.save(); ctx.translate(cx, ballY); ctx.rotate(t * .12);
+    const rays = ctx.createRadialGradient(0, 0, ballR, 0, 0, S * .25); rays.addColorStop(0, C(.11 * power)); rays.addColorStop(1, C(0));
+    ctx.fillStyle = rays; ctx.beginPath();
+    for (let i = 0; i < 7; i++) { const a = i * TAU / 7, w = .07 + .03 * Math.sin(t * .7 + i * 1.7); ctx.moveTo(0, 0); ctx.arc(0, 0, S * .25, a - w, a + w); ctx.closePath(); }
+    ctx.fill(); ctx.restore();
+
+    // soft pool of light on the floor (no ring)
+    const pool = ctx.createRadialGradient(cx, footY + S * .012, 0, cx, footY + S * .012, r * 3.4);
+    pool.addColorStop(0, C(.2 * breathe)); pool.addColorStop(1, C(0));
+    ctx.save(); ctx.translate(0, footY + S * .012); ctx.scale(1, .22); ctx.translate(0, -(footY + S * .012)); ctx.fillStyle = pool; ctx.fillRect(cx - r * 3.4, footY + S * .012 - r * 3.4, r * 6.8, r * 6.8); ctx.restore();
 
 
     // words behind the pole
@@ -109,6 +124,11 @@
     const gl = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
     gl.addColorStop(0, 'rgba(255,250,240,0)'); gl.addColorStop(.22, 'rgba(255,250,240,.16)'); gl.addColorStop(.3, 'rgba(255,250,240,0)'); gl.addColorStop(.78, 'rgba(255,250,240,0)'); gl.addColorStop(.86, 'rgba(255,250,240,.07)'); gl.addColorStop(1, 'rgba(255,250,240,0)');
     ctx.fillStyle = gl; ctx.fillRect(cx - r, tubeTop, r * 2, tubeH);
+    // glints rising inside the glass
+    ctx.save(); ctx.beginPath(); ctx.rect(cx - r, tubeTop, r * 2, tubeH); ctx.clip(); ctx.fillStyle = 'rgba(255,250,240,.9)'; ctx.shadowColor = C(1); ctx.shadowBlur = 6; ctx.beginPath();
+    for (const g of GLINTS) { g.y -= dt * g.s * (.4 + .6 * power); if (g.y < 0) { g.y = 1; g.a = Math.random() * TAU; } const z = Math.cos(g.a + t * .3); if (z < .1) continue;
+      const gx = cx + Math.sin(g.a + t * .3) * r * .78, gy = tubeTop + g.y * tubeH, gr = S * .0035 * z * (.6 + .4 * Math.sin(g.y * Math.PI)); ctx.moveTo(gx + gr, gy); ctx.arc(gx, gy, gr, 0, TAU); }
+    ctx.fill(); ctx.restore();
 
     // ---------- collars, dome, finials, base ----------
     const collar = (y, h, rr) => { // a metal band: back rim, body, front rim
@@ -116,21 +136,19 @@
       ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, y + h, rr, rr * e, 0, 0, Math.PI); ctx.lineTo(cx - rr, y); ctx.ellipse(cx, y, rr, rr * e, 0, Math.PI, 0, true); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = C(.75); ctx.lineWidth = 1; ring(cx, y, rr, e, true); ctx.stroke(); ring(cx, y, rr, e, false); ctx.stroke(); ring(cx, y + h, rr, e, true); ctx.stroke();
     };
-    const ch = S * .028, cr = r * 1.22;
     // top: collar, dome, neck, finial ball
     collar(tubeTop - ch, ch, cr);
-    const domeH = S * .075, dg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
+    const dg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
     dg.addColorStop(0, C(.08)); dg.addColorStop(.35, C(.45)); dg.addColorStop(.6, C(.2)); dg.addColorStop(1, C(.06));
     ctx.fillStyle = dg; ctx.beginPath(); ctx.moveTo(cx - cr, tubeTop - ch); ctx.bezierCurveTo(cx - cr, tubeTop - ch - domeH * .9, cx - cr * .35, tubeTop - ch - domeH, cx, tubeTop - ch - domeH); ctx.bezierCurveTo(cx + cr * .35, tubeTop - ch - domeH, cx + cr, tubeTop - ch - domeH * .9, cx + cr, tubeTop - ch); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = C(.6); ctx.lineWidth = 1; ctx.stroke();
-    const neckY = tubeTop - ch - domeH, ballR = r * .42;
     ctx.fillStyle = C(.5); ctx.fillRect(cx - r * .12, neckY - S * .018, r * .24, S * .018);
     const bg = ctx.createRadialGradient(cx - ballR * .35, neckY - S * .018 - ballR * 1.35, ballR * .1, cx, neckY - S * .018 - ballR, ballR * 1.1);
     bg.addColorStop(0, 'rgba(255,250,240,.95)'); bg.addColorStop(.35, C(.85)); bg.addColorStop(1, C(.15));
     ctx.shadowColor = C(.7); ctx.shadowBlur = 16 * breathe; ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(cx, neckY - S * .018 - ballR, ballR, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
     // bottom: collar, tapered skirt, small ball
     collar(tubeBot, ch, cr);
-    const skY = tubeBot + ch, skH = S * .06, sg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
+    const sg = ctx.createLinearGradient(cx - cr, 0, cx + cr, 0);
     sg.addColorStop(0, C(.06)); sg.addColorStop(.35, C(.4)); sg.addColorStop(.6, C(.18)); sg.addColorStop(1, C(.05));
     ctx.fillStyle = sg; ctx.beginPath(); ctx.moveTo(cx - cr, skY); ctx.bezierCurveTo(cx - cr, skY + skH * .6, cx - r * .3, skY + skH * .8, cx - r * .14, skY + skH); ctx.lineTo(cx + r * .14, skY + skH); ctx.bezierCurveTo(cx + r * .3, skY + skH * .8, cx + cr, skY + skH * .6, cx + cr, skY); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = C(.55); ctx.stroke();
@@ -143,6 +161,13 @@
     const sp = (t / SCAN_PERIOD) % 1, sy = tubeTop + sp * tubeH, sa = .5 * Math.pow(Math.sin(sp * Math.PI), 2);
     const sl = ctx.createLinearGradient(cx - r * 1.6, 0, cx + r * 1.6, 0); sl.addColorStop(0, C(0)); sl.addColorStop(.5, C(sa)); sl.addColorStop(1, C(0));
     ctx.strokeStyle = sl; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(cx - r * 1.6, sy); ctx.lineTo(cx + r * 1.6, sy); ctx.stroke();
+
+    // mirror reflection on the floor, fading out
+    const srcTop = ballY - ballR, srcH = footY - srcTop, refH = srcH * .42, ry = footY + 2;
+    ctx.save(); ctx.globalAlpha = .2; ctx.translate(0, ry); ctx.scale(1, -1);
+    ctx.drawImage(cv, Math.max(0, (cx - cr * 1.3) * dpr), srcTop * dpr, cr * 2.6 * dpr, srcH * dpr, cx - cr * 1.3, -refH, cr * 2.6, refH); ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation = 'destination-out'; const fadeR = ctx.createLinearGradient(0, ry, 0, ry + refH);
+    fadeR.addColorStop(0, 'rgba(0,0,0,.2)'); fadeR.addColorStop(1, 'rgba(0,0,0,1)'); ctx.fillStyle = fadeR; ctx.fillRect(cx - cr * 1.4, ry, cr * 2.8, refH + 2); ctx.restore();
 
     // words in front of the pole
     items.filter(it => it.z >= 0).sort((a, b) => a.z - b.z).forEach(it => glowText(it.w, it.x, it.y, .3 + .7 * it.z, fs, it === best && it.z > .8));
