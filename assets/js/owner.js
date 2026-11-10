@@ -1178,33 +1178,68 @@
   function viewPortfolio() {
     const items = D.portfolio_items.slice().sort(by('sort'));
     const boxName = it => (it.category || it.title || 'Cuts').trim();
+    const onHome = it => it.on_homepage !== false;
     const photos = items.filter(i => i.image_url), empties = items.filter(i => !i.image_url);
+    const homePhotos = photos.filter(onHome);
     const boxes = [...new Set(photos.map(boxName))];
     if (!UI.pfBox || (!boxes.includes(UI.pfBox) && !UI.pfCustom)) UI.pfBox = boxes[0] || 'Fresh cuts';
+    if (!UI.pfView) UI.pfView = 'all';
     const maxSort = () => Math.max(0, ...items.map(i => i.sort || 0));
-    const pick = h('select', { class: 'inp', 'aria-label': 'Box to upload into', style: 'width:auto', onchange: e => { if (e.target.value === '__new') { const n = (prompt('Name the new box (for example "Fades" or "Curly")') || '').trim().slice(0, 40); if (n) { UI.pfBox = n; UI.pfCustom = true; } render(); } else { UI.pfBox = e.target.value; UI.pfCustom = false; } } },
-      [...new Set([...boxes, UI.pfBox])].map(b => h('option', { value: b, selected: b === UI.pfBox }, b)), h('option', { value: '__new' }, '+ New box…'));
-    const up = h('label', { class: 'btn gold upload' }, icon('plus'), 'Upload photos', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, onchange: async e => {
-      const files = [...e.target.files]; if (!files.length) return; let max = maxSort();
+    const needSql = err => /on_homepage/.test(String(err && err.message));
+    const sqlMsg = 'Run supabase/updates/2026-11-10-homepage-photos.sql in Supabase first, then try again.';
+    const pick = h('select', { class: 'inp', 'aria-label': 'Type of cut', style: 'width:auto', onchange: e => { if (e.target.value === '__new') { const n = (prompt('Name the new type (for example "Fades" or "Curly")') || '').trim().slice(0, 40); if (n) { UI.pfBox = n; UI.pfCustom = true; } render(); } else { UI.pfBox = e.target.value; UI.pfCustom = false; } } },
+      [...new Set([...boxes, UI.pfBox])].map(b => h('option', { value: b, selected: b === UI.pfBox }, b)), h('option', { value: '__new' }, '+ New type…'));
+    const alsoHome = h('input', { type: 'checkbox', checked: !!UI.pfAlsoHome, onchange: e => { UI.pfAlsoHome = e.target.checked; } });
+    const up = h('label', { class: 'btn gold upload' }, icon('plus'), 'Add photos', h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', multiple: true, onchange: async e => {
+      const files = [...e.target.files]; if (!files.length) return; let max = maxSort(), ok = 0;
       for (const f of files) {
-        try { toast(`Uploading ${f.name}…`); const url = await LC.upload(f); await LC.insert('portfolio_items', { title: UI.pfBox, category: UI.pfBox, description: '', image_url: url, published: true, sort: ++max }); }
-        catch (err) { toast(err.message); }
+        try {
+          toast(`Uploading ${f.name}…`); const url = await LC.upload(f);
+          const row = { title: UI.pfBox, category: UI.pfBox, description: '', image_url: url, published: true, on_homepage: !!UI.pfAlsoHome, sort: ++max };
+          try { await LC.insert('portfolio_items', row); }
+          catch (err) { if (!needSql(err)) throw err; delete row.on_homepage; await LC.insert('portfolio_items', row); toast('Added. ' + sqlMsg); }
+          ok++;
+        } catch (err) { toast(err.message); }
       }
-      toast(`Added to ${UI.pfBox}`); refresh(['portfolio_items']);
+      if (ok) toast(`${ok} photo${ok > 1 ? 's' : ''} added to your full portfolio${UI.pfAlsoHome ? ' and homepage' : ''}`);
+      refresh(['portfolio_items']);
     } }));
-    const makeCover = async it => { const box = photos.filter(p => boxName(p) === boxName(it)); const first = box[0]; if (first === it) return; await run(() => Promise.all([LC.update('portfolio_items', it.id, { sort: first.sort }), LC.update('portfolio_items', first.id, { sort: it.sort })]), 'Cover changed'); refresh(['portfolio_items']); };
-    const moveBox = async (it, to) => { if (to === '__new') { to = (prompt('Name the new box') || '').trim().slice(0, 40); if (!to) return render(); } await run(() => LC.update('portfolio_items', it.id, { category: to, title: to }), `Moved to ${to}`); refresh(['portfolio_items']); };
+    const setHome = async (it, v) => {
+      try { await LC.update('portfolio_items', it.id, { on_homepage: v }); toast(v ? 'Now on your homepage' : 'Off the homepage (still in your full portfolio)'); }
+      catch (err) { toast(needSql(err) ? sqlMsg : err.message); }
+      refresh(['portfolio_items']);
+    };
+    const makeCover = async it => { const box = homePhotos.filter(p => boxName(p) === boxName(it)); const first = box[0]; if (!first || first === it) return; await run(() => Promise.all([LC.update('portfolio_items', it.id, { sort: first.sort }), LC.update('portfolio_items', first.id, { sort: it.sort })]), 'Cover changed'); refresh(['portfolio_items']); };
+    const moveBox = async (it, to) => { if (to === '__new') { to = (prompt('Name the new type') || '').trim().slice(0, 40); if (!to) return render(); } await run(() => LC.update('portfolio_items', it.id, { category: to, title: to }), `Moved to ${to}`); refresh(['portfolio_items']); };
+    const when = it => it.created_at ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(it.created_at)) : '';
     const card = (it, isCover) => h('div', { class: 'pf' },
-      h('div', { class: 'img' }, h('img', { src: it.image_url, alt: boxName(it), loading: 'lazy' }), isCover ? h('span', { class: 'badge' }, '★ Cover') : (!it.published ? h('span', { class: 'badge' }, 'Hidden') : null)),
+      h('div', { class: 'img' }, h('img', { src: it.image_url, alt: boxName(it), loading: 'lazy' }),
+        !it.published ? h('span', { class: 'badge' }, 'Hidden') : isCover ? h('span', { class: 'badge' }, '★ Cover') : onHome(it) ? h('span', { class: 'badge' }, 'Homepage') : null),
       h('div', { class: 'body' },
-        h('select', { class: 'inp', 'aria-label': 'Box', onchange: e => moveBox(it, e.target.value) }, boxes.map(b => h('option', { value: b, selected: b === boxName(it) }, b)), h('option', { value: '__new' }, '+ New box…')),
-        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: it.published, onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { published: e.target.checked }), e.target.checked ? 'Showing on site' : 'Hidden from site'); refresh(['portfolio_items']); } }), 'Show on site'),
-        h('div', { class: 'tools' }, isCover ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => makeCover(it) }, '★ Make cover'), armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
+        h('select', { class: 'inp', 'aria-label': 'Type of cut', onchange: e => moveBox(it, e.target.value) }, boxes.map(b => h('option', { value: b, selected: b === boxName(it) }, b)), h('option', { value: '__new' }, '+ New type…')),
+        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: onHome(it), disabled: !it.published, onchange: e => setHome(it, e.target.checked) }), 'On homepage'),
+        h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: it.published, onchange: async e => { await run(() => LC.update('portfolio_items', it.id, { published: e.target.checked }), e.target.checked ? 'Showing on site' : 'Hidden everywhere'); refresh(['portfolio_items']); } }), 'Show on site'),
+        h('div', { class: 'tools' }, (UI.pfView === 'home' && !isCover) ? h('button', { class: 'btn sm', type: 'button', onclick: () => makeCover(it) }, '★ Make cover') : null,
+          h('span', { class: 'muted small', style: 'align-self:center;margin-right:auto' }, when(it)),
+          armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
     const emptyCard = it => h('div', { class: 'pf' }, h('div', { class: 'img' }, h('span', { class: 'ph' }, it.title), h('span', { class: 'badge' }, it.published ? 'Placeholder' : 'Hidden')),
       h('div', { class: 'body' }, h('b', {}, it.title), h('div', { class: 'tools' }, armBtn('Delete', async () => { await run(() => LC.remove('portfolio_items', it.id), 'Deleted'); refresh(['portfolio_items']); }, 'btn sm danger', 'Sure?'))));
+    const newest = list => list.slice().sort((a, b) => (new Date(b.created_at || 0) - new Date(a.created_at || 0)) || ((b.sort || 0) - (a.sort || 0)));
+    const views = { all: ['Everything', photos.length], home: ['On homepage', homePhotos.length] };
+    const tabs = h('div', { class: 'chips', style: 'margin-bottom:14px' }, Object.entries(views).map(([k, [label, n]]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(UI.pfView === k), onclick: () => { UI.pfView = k; render(); } }, label, h('span', { class: 'ct' }, n))));
+    let body;
+    if (!photos.length) body = h('div', { class: 'empty' }, 'No photos yet. Pick a type of cut, then tap Add photos.');
+    else if (UI.pfView === 'home') {
+      const hb = [...new Set(homePhotos.map(boxName))];
+      body = h('div', {}, h('p', { class: 'hint', style: 'margin:0 0 14px' }, 'These are the photos in the homepage carousel, grouped by type. The ★ cover shows first. Turn "On homepage" off to take one down. It stays in your full portfolio.'),
+        hb.length ? hb.map(b => { const list = homePhotos.filter(p => boxName(p) === b); return h('section', { style: 'margin-bottom:22px' }, h('h3', { style: 'margin:0 0 10px' }, `${b} `, h('span', { class: 'muted small' }, `${list.length} photo${list.length > 1 ? 's' : ''}`)), h('div', { class: 'pf-grid' }, list.map((it, i) => card(it, i === 0)))); }) : h('div', { class: 'empty' }, 'Nothing on the homepage yet. Go to Everything and turn "On homepage" on for your best photos.'));
+    } else body = h('div', {}, h('p', { class: 'hint', style: 'margin:0 0 14px' }, 'Your full portfolio, newest first. Everything here shows on lopezcuts.com/portfolio. Turn "On homepage" on for the few you want in the homepage carousel.'), h('div', { class: 'pf-grid' }, newest(photos).map(it => card(it, false))));
     return [
-      h('div', { class: 'row between', style: 'margin-bottom:14px;gap:12px;flex-wrap:wrap' }, h('p', { class: 'hint', style: 'max-width:560px' }, 'Each box is one tile in "The Work" on your site. The ★ cover photo shows on the tile, and tapping it opens every photo in the box. Pick a box, then Upload photos to add to it.'), h('div', { class: 'row' }, pick, up)),
-      photos.length ? h('div', {}, boxes.map(b => { const list = photos.filter(p => boxName(p) === b); return h('section', { style: 'margin-bottom:22px' }, h('h3', { style: 'margin:0 0 10px' }, `${b} `, h('span', { class: 'muted small' }, `${list.length} photo${list.length > 1 ? 's' : ''}`)), h('div', { class: 'pf-grid' }, list.map((it, i) => card(it, i === 0)))); })) : h('div', { class: 'empty' }, 'No photos yet. Pick or create a box, then tap Upload photos.'),
+      h('div', { class: 'row between', style: 'margin-bottom:14px;gap:12px;flex-wrap:wrap' },
+        h('p', { class: 'hint', style: 'max-width:520px' }, 'New photos go straight to your full portfolio page. Your homepage only changes when you turn "On homepage" on or off.'),
+        h('div', { class: 'row', style: 'gap:10px;flex-wrap:wrap;align-items:center' }, pick, h('label', { class: 'toggle' }, alsoHome, 'Also on homepage'), up,
+          h('a', { class: 'btn', href: '/portfolio', target: '_blank', rel: 'noopener' }, 'View page'))),
+      tabs, body,
       empties.length ? h('details', { style: 'margin-top:10px' }, h('summary', { class: 'muted' }, `Old placeholder tiles (${empties.length})${photos.length ? ', not shown on the site' : ''}`), h('div', { class: 'pf-grid', style: 'margin-top:10px' }, empties.map(emptyCard))) : null,
     ];
   }

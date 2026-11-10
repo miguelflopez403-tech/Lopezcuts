@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Full Portfolio | Lopez Cuts by Miguel Lopez, Salt Lake City Barber</title>
+<meta name="description" content="Every cut by Miguel Lopez of Lopez Cuts, newest first: taper fades, burst fades, modern mullets, mod cuts and scissor work in Salt Lake City. New photos added almost every day.">
+<link rel="canonical" href="https://www.lopezcuts.com/portfolio">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:site_name" content="Lopez Cuts">
+<meta property="og:title" content="Full Portfolio | Lopez Cuts">
+<meta property="og:description" content="Every cut by Miguel Lopez, newest first. Taper fades, burst fades, mullets and mod cuts in Salt Lake City.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.lopezcuts.com/portfolio">
+<meta property="og:image" content="https://www.lopezcuts.com/assets/img/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+ "@context": "https://schema.org",
+ "@type": "CollectionPage",
+ "name": "Lopez Cuts full portfolio",
+ "url": "https://www.lopezcuts.com/portfolio",
+ "description": "Every haircut by Miguel Lopez of Lopez Cuts in Salt Lake City, newest first.",
+ "isPartOf": { "@type": "WebSite", "name": "Lopez Cuts", "url": "https://www.lopezcuts.com/" },
+ "about": { "@type": "Person", "name": "Miguel Lopez", "url": "https://www.lopezcuts.com/miguel-lopez" },
+ "breadcrumb": { "@type": "BreadcrumbList", "itemListElement": [
+  { "@type": "ListItem", "position": 1, "name": "Lopez Cuts", "item": "https://www.lopezcuts.com/" },
+  { "@type": "ListItem", "position": 2, "name": "Portfolio", "item": "https://www.lopezcuts.com/portfolio" }
+ ]}
+}
+</script>
+<meta name="theme-color" content="#050505">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/assets/img/favicon-64.png">
+<link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bebas+Neue&family=Cinzel:wght@600;700&family=Rajdhani:wght@500;600&display=swap">
+<link rel="stylesheet" href="/assets/css/site.css">
+<style>
+  .pf-hero { padding-block: clamp(44px, 6vw, 80px) clamp(28px, 4vw, 44px); }
+  .pf-hero h1 { font-size: clamp(3rem, 9vw, 6rem); line-height: .9; margin: 14px 0 12px; }
+  .pf-hero .lede { font-size: clamp(1.02rem, 1.7vw, 1.15rem); max-width: 36em; line-height: 1.6; margin: 0; color: var(--on-ink-muted); }
+  .crumbs { font-size: .85rem; color: var(--on-ink-muted); }
+  .crumbs a { color: var(--on-ink-muted); }
+  .pf-bar { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; margin: 0 0 18px; scrollbar-width: none; }
+  .pf-bar::-webkit-scrollbar { display: none; }
+  .pf-chip { flex: none; font: 600 .9rem/1 var(--body); padding: 10px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+  .pf-chip small { color: var(--muted); font-weight: 500; }
+  .pf-chip[aria-pressed="true"] { background: var(--ink); color: var(--gold); border-color: var(--ink); }
+  .pf-chip[aria-pressed="true"] small { color: var(--gold); opacity: .75; }
+  .pf-chip:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .pf-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .pf-tile { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--paper-2); cursor: zoom-in; aspect-ratio: 4 / 5; }
+  .pf-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s var(--ease, ease); }
+  .pf-tile:hover img { transform: scale(1.03); }
+  .pf-tile:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .pf-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 12px 10px; background: linear-gradient(transparent, rgb(5 5 5 / 78%)); color: #f3efe6; font: 600 .85rem/1.2 var(--body); text-align: left; display: flex; justify-content: space-between; gap: 8px; }
+  .pf-cap small { color: #d8cfbd; font-weight: 500; }
+  .pf-new { position: absolute; top: 10px; left: 10px; font: 600 .68rem/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: var(--gold); border-radius: 999px; padding: 5px 8px; }
+  .pf-count { color: var(--muted); font-size: .92rem; margin: 0 0 14px; }
+  .pf-more { display: flex; justify-content: center; margin-top: 22px; }
+  .pf-empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  @media (max-width: 1000px) { .pf-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 640px) { .pf-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .pf-cap { font-size: .78rem; padding: 22px 9px 8px; } .pf-cap small { display: none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-row">
+    <a class="brand" href="/" aria-label="Lopez Cuts home"><img class="brand-logo" src="/assets/img/logo-mark.png" alt="" width="149" height="200"><span class="brand-word">Lopez Cuts</span></a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="/#services">Prices</a>
+      <a href="/#work">Portfolio</a>
+      <a href="/#reviews">Reviews</a>
+      <a href="/#faq">FAQ</a>
+    </nav>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a class="btn gold sm" href="/#book">Book now</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+  <section class="band ink pf-hero">
+    <div class="wrap">
+      <p class="crumbs"><a href="/">Lopez Cuts</a> / Portfolio</p>
+      <h1>Full <span class="gold">portfolio.</span></h1>
+      <p class="lede">Every cut, newest first. I add fresh photos almost every day, so check back to see what just left the chair.</p>
+    </div>
+  </section>
+
+  <section class="band paper" style="padding-top:28px">
+    <div class="wrap">
+      <div class="pf-bar" id="pfBar" role="group" aria-label="Filter by cut"></div>
+      <p class="pf-count" id="pfCount" aria-live="polite">Loading photos…</p>
+      <ul class="pf-grid" id="pfGrid"></ul>
+      <div class="pf-more"><button class="btn" type="button" id="pfMore" hidden>Show more</button></div>
+      <p class="center muted small" style="margin-top:22px">Like what you see? <a class="link" href="/#book">Book your cut</a> · More on Instagram <a class="link" href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener">@lopezcuts.dmv</a></p>
+    </div>
+  </section>
+
+  <section class="band gold-band">
+    <div class="wrap cta-row">
+      <h2>Want one of these?</h2>
+      <a class="btn ink lg" href="/#book">Book now</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer" id="contact">
+  <div class="wrap foot-grid">
+    <div>
+      <a class="foot-logo" href="/" aria-label="Lopez Cuts home"><img src="/assets/img/logo-full.png" alt="Lopez Cuts" width="641" height="435" loading="lazy"></a>
+      <p class="muted">Quality barbering in Salt Lake City, Utah. Roots in the DMV.</p>
+    </div>
+    <div>
+      <h3 class="foot-h">Contact</h3>
+      <ul class="foot-list">
+        <li><a href="mailto:miguel@lopezcuts.com">miguel@lopezcuts.com</a></li>
+        <li><a href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener me">Instagram @lopezcuts.dmv</a></li>
+        <li><a href="https://www.linkedin.com/in/miguel-lopez-ml403/" target="_blank" rel="noopener me">LinkedIn: Miguel Lopez</a></li>
+        <li><span>Salt Lake City, UT · address sent with your confirmation</span></li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="foot-h">Lopez Cuts</h3>
+      <ul class="foot-list">
+        <li><a href="/#book">Book online</a></li>
+        <li><a href="/portfolio">Full portfolio</a></li>
+        <li><a href="/#reviews">Reviews</a></li>
+        <li><a href="/#faq">FAQ</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="wrap foot-base">
+    <p>© 2026 Lopezcuts. All rights reserved.</p>
+  </div>
+</footer>
+
+<dialog class="lightbox" id="lightbox" aria-label="Photo">
+  <button class="icon-btn lb-close" type="button" id="lbClose" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+  <div class="lb-media" id="lbMedia"></div>
+  <div class="lb-cap" id="lbCap"></div>
+</dialog>
+
+<script src="/assets/js/config.js"></script>
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/portfolio.js"></script>
+</body>
+</html>

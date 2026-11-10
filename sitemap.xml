@@ -235,6 +235,12 @@
     </image:image>
   </url>
   <url>
+    <loc>https://www.lopezcuts.com/portfolio</loc>
+    <lastmod>2026-11-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://www.lopezcuts.com/miguel-lopez</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>

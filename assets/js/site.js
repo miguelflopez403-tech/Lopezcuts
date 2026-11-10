@@ -631,7 +631,8 @@
         LC.list('reviews', { eq: { status: 'published' }, order: 'created_at', asc: false }),
         LC.list('portfolio_items', { eq: { published: true }, order: 'sort' }),
       ]);
-      Object.assign(state, { settings, services, staff, reviews, portfolio });
+      // Homepage shows only the picked photos; everything else lives on /portfolio.
+      Object.assign(state, { settings, services, staff, reviews, portfolio: portfolio.filter(p => p.on_homepage !== false) });
       if (settings?.timezone) T.tz = settings.timezone;
       renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); setupHeadlines(); showMyBooking(); checkHash();
     } catch (e) {
