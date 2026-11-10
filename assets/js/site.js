@@ -361,6 +361,12 @@
   const addonsPrice = () => addonList().filter(a => B.addons.has(a.id)).reduce((t, a) => t + +a.price, 0);
 
   try { const saved = JSON.parse(localStorage.getItem('lopezcuts-me') || 'null'); if (saved) Object.assign(B.form, saved); } catch { }
+  // Reference photo: picked on /portfolio ("Use as my reference") or inside the booking sheet.
+  // It rides along in the booking note as "Reference photo: <url>", and the owner dashboard shows the picture.
+  const readRef = () => { try { const r = JSON.parse(localStorage.getItem('lopezcuts-ref') || 'null'); return r && r.url ? r : null; } catch { return null; } };
+  const saveRef = r => { B.ref = r; try { r ? localStorage.setItem('lopezcuts-ref', JSON.stringify(r)) : localStorage.removeItem('lopezcuts-ref'); } catch { } };
+  B.ref = readRef(); B.picking = false; B.pickCat = 'All';
+  const absUrl = u => { try { return new URL(u, location.origin).href; } catch { return u; } };
 
   function openBooking(opts = {}) {
     if (!state.services.length) { toast('Loading services, try again in a second'); return; }
@@ -370,7 +376,7 @@
     if (opts.serviceId) { B.serviceId = opts.serviceId; B.slot = null; }
     B.serviceId = B.serviceId || (pick || mains[0])?.id;
     B.staffId = B.staffId || state.staff[0]?.id;
-    B.error = ''; B.result = null; B.step = 0;
+    B.error = ''; B.result = null; B.step = 0; B.picking = false; B.ref = readRef() || B.ref;
     if (opts.day && opts.slot) { B.day = opts.day; B.slot = opts.slot; }
     sheet.showModal(); render();
     if (opts.day && opts.slot) go(1);
@@ -390,8 +396,8 @@
   function render() {
     const s = B.step;
     backBtn.hidden = !(s === 1 || s === 2);
-    $('#sheetFoot').hidden = s === 3 || s === 9;
-    header(STEPS[s] || 'Your booking', s < 3 ? `Step ${s + 1} of 3` : (s === 3 ? 'Confirmed' : 'Manage'), s < 3 ? (s + 1) * 33.4 : 100);
+    $('#sheetFoot').hidden = s === 3 || s === 9 || (s === 2 && B.picking);
+    header(s === 2 && B.picking ? 'Pick your reference' : (STEPS[s] || 'Your booking'), s < 3 ? `Step ${s + 1} of 3` : (s === 3 ? 'Confirmed' : 'Manage'), s < 3 ? (s + 1) * 33.4 : 100);
     const view = s === 0 ? stepService() : s === 1 ? stepTime() : s === 2 ? stepDetails() : s === 3 ? stepDone() : null;
     if (view) { const wrap = h('div', { class: 'step-anim' }, view); body.replaceChildren(wrap); }
     paintFoot();
@@ -409,6 +415,7 @@
     const mains = state.services.filter(s => !s.is_addon && s.bookable && s.active);
     const adds = addonList();
     return [
+      B.ref ? h('div', { class: 'ref-box', style: 'margin-bottom:12px' }, h('div', { class: 'ref-row' }, h('img', { src: B.ref.url, alt: '' }), h('div', {}, h('b', {}, 'Reference added'), h('span', { class: 'muted small' }, `${B.ref.cat || 'Your pick'}. You can change it on the last step.`)))) : null,
       h('p', { class: 'opt-label' }, 'Service'),
       h('div', { class: 'svc-list', role: 'radiogroup', 'aria-label': 'Service' }, mains.map(s => h('button', { class: 'svc', type: 'button', role: 'radio', 'aria-checked': String(B.serviceId === s.id), onclick: () => { B.serviceId = s.id; B.slot = null; render(); } },
         h('span', { class: 'box' }, icon('check')),
@@ -461,7 +468,29 @@
     });
     return out;
   }
+  function refField() {
+    const pick = () => { B.picking = true; render(); body.scrollTop = 0; };
+    if (B.ref) return h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Reference photo'),
+      h('div', { class: 'ref-box' }, h('div', { class: 'ref-row' }, h('img', { src: B.ref.url, alt: `Reference: ${B.ref.cat || 'haircut'}` }), h('div', {}, h('b', {}, B.ref.cat || 'Your reference'), h('span', { class: 'muted small' }, 'Miguel will see this photo with your booking.'))),
+        h('div', { class: 'ref-tools' }, h('button', { class: 'btn sm', type: 'button', onclick: pick }, 'Change'), h('button', { class: 'btn sm', type: 'button', onclick: () => { saveRef(null); render(); } }, 'Remove'))));
+    return h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Reference photo (recommended)'),
+      h('div', { class: 'ref-box' }, h('span', { class: 'muted small' }, 'Got a cut in mind? Pick one from Miguel\'s portfolio so he knows exactly what you want. You can also bring or text your own pic.'),
+        h('div', { class: 'ref-tools' }, (state.portfolioAll || []).length ? h('button', { class: 'btn gold sm', type: 'button', onclick: pick }, 'Pick from portfolio') : null)));
+  }
+  function stepPick() {
+    const all = state.portfolioAll || [];
+    const cat = p => (p.category || p.title || 'Cuts').trim();
+    const cats = ['All', ...new Set(all.map(cat))];
+    const list = (B.pickCat === 'All' ? all : all.filter(p => cat(p) === B.pickCat)).slice().sort((a, b) => (new Date(b.created_at || 0) - new Date(a.created_at || 0)) || ((b.sort || 0) - (a.sort || 0)));
+    return h('div', { class: 'ref-pick' },
+      h('p', { class: 'muted small', style: 'margin:0' }, 'Tap the cut you want. Newest first.'),
+      h('div', { class: 'ref-chips', role: 'group', 'aria-label': 'Filter by cut' }, cats.map(c => h('button', { type: 'button', 'aria-pressed': String(B.pickCat === c), onclick: () => { B.pickCat = c; render(); } }, c))),
+      h('div', { class: 'ref-grid' }, list.map(p => h('button', { type: 'button', 'aria-pressed': String(B.ref?.url === absUrl(p.image_url)), 'aria-label': `Use this ${cat(p)} as my reference`, onclick: () => { saveRef({ id: p.id, url: absUrl(p.image_url), cat: cat(p) }); B.picking = false; render(); body.scrollTop = body.scrollHeight; } },
+        h('img', { src: p.image_url, alt: cat(p), loading: 'lazy' })))),
+      h('button', { class: 'btn sm', type: 'button', style: 'justify-self:start', onclick: () => { B.picking = false; render(); } }, 'Back to my details'));
+  }
   function stepDetails() {
+    if (B.picking) return stepPick();
     const f = B.form;
     const bind = (k) => e => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; };
     return [
@@ -470,7 +499,8 @@
       h('div', { class: 'field-row' },
         h('div', { class: 'field' }, h('label', { for: 'bPhone' }, 'Mobile number'), h('input', { id: 'bPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, placeholder: '(801) 555-1234', value: f.phone, oninput: bind('phone') }), h('span', { class: 'hint' }, 'For your confirmation text. Never shared.')),
         h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email (optional)'), h('input', { id: 'bEmail', type: 'email', autocomplete: 'email', value: f.email, oninput: bind('email') }))),
-      h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '500', placeholder: 'Style you want, reference photo on IG, first time, etc.', oninput: bind('note') }, f.note)),
+      refField(),
+      h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '300', placeholder: 'Style you want, how short on the sides, first time, etc.', oninput: bind('note') }, f.note)),
       // Only asked on the First Time Haircut (most clients are regulars).
       svc().first_visit_only ? h('div', { class: 'field' }, h('label', { for: 'bFound' }, 'How did you find Miguel? (optional)'), h('select', { id: 'bFound', onchange: bind('found') }, h('option', { value: '' }, 'Pick one'), FOUND.map(([v, l]) => h('option', { value: v, selected: f.found === v }, l)))) : null,
       h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember my name and number on this device'),
@@ -491,10 +521,10 @@
       if (!LC.normPhone(f.phone)) { B.error = 'Please enter a valid mobile number.'; render(); $('#bPhone')?.focus(); return; }
       B.busy = true; nextBtn.disabled = true; nextBtn.textContent = 'Booking…';
       try {
-        const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: f.note.trim() });
+        const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: (f.note.trim().slice(0, 300) + (B.ref ? `\nReference photo: ${B.ref.url}` : '')).trim().slice(0, 500) });
         try { if (f.remember) localStorage.setItem('lopezcuts-me', JSON.stringify({ name: f.name, phone: f.phone, email: f.email, remember: true })); else localStorage.removeItem('lopezcuts-me'); } catch { }
         if (f.found && svc().first_visit_only && r?.token) LC.rpc('set_heard_from', { p_token: r.token, p_heard_from: f.found }).catch(() => { });
-        rememberBooking(r); B.result = r; B.form.note = ''; B.busy = false; go(3); nextOpening();
+        rememberBooking(r); B.result = r; B.form.note = ''; saveRef(null); B.busy = false; go(3); nextOpening();
       } catch (e) {
         B.busy = false; B.error = e.message;
         if (/taken/i.test(e.message)) { B.slot = null; go(1); B.error = e.message; } else render();
@@ -632,7 +662,7 @@
         LC.list('portfolio_items', { eq: { published: true }, order: 'sort' }),
       ]);
       // Homepage shows only the picked photos; everything else lives on /portfolio.
-      Object.assign(state, { settings, services, staff, reviews, portfolio: portfolio.filter(p => p.on_homepage !== false) });
+      Object.assign(state, { settings, services, staff, reviews, portfolioAll: portfolio.filter(p => p.image_url), portfolio: portfolio.filter(p => p.on_homepage !== false) });
       if (settings?.timezone) T.tz = settings.timezone;
       renderGallery(); renderReviews(); renderPrices(); nextOpening(); setupReveal(); setupHeadlines(); showMyBooking(); checkHash();
     } catch (e) {

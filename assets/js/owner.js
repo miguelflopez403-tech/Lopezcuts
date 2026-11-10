@@ -23,6 +23,11 @@
   }
   const svgNS = 'http://www.w3.org/2000/svg';
   const icon = id => { const s = document.createElementNS(svgNS, 'svg'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true'); const u = document.createElementNS(svgNS, 'use'); u.setAttribute('href', '#i-' + id); s.append(u); return s; };
+  // Clients can attach a reference photo from the portfolio; it arrives in the booking note as "Reference photo: <url>".
+  const REF_RE = /(?:^|\n)Reference photo: (\S+)\s*$/;
+  const refOf = a => { const m = String(a.client_message || '').match(REF_RE); if (!m) return null; const u = m[1];
+    return u.startsWith(location.origin + '/') || /^https:\/\/(www\.lopezcuts\.com|[a-z0-9-]+\.supabase\.co)\//.test(u) ? u : null; };
+  const msgOf = a => String(a.client_message || '').replace(REF_RE, '').trim();
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2800); }
   async function copy(text) { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Couldn\'t copy. Select the text and copy it.'); } }
   const field = (label, input, hint) => h('label', { class: 'f' }, label, input, hint ? h('span', { class: 'hint' }, hint) : null);
@@ -432,7 +437,8 @@
         h('div', { class: 'who' }, c.full_name, a.new_client ? h('span', { class: 'pill gold plain' }, 'New') : null, (c.tags || []).map(t => h('span', { class: 'pill plain' }, t)), st && st.noShows > 1 ? h('span', { class: 'pill warn plain' }, st.noShows + ' no-shows') : null),
         h('div', { class: 'what' }, `${svcName(a)}${D.staff.length > 1 ? ' · ' + staffName(a.staff_id) : ''}`),
         c.notes ? h('div', { class: 'note' }, '📝 ' + c.notes) : null,
-        a.client_message ? h('div', { class: 'note' }, 'Client wrote: ' + a.client_message) : null),
+        refOf(a) ? h('div', { class: 'note ref-note' }, h('img', { src: refOf(a), alt: 'Reference photo', loading: 'lazy' }), 'Has a reference photo') : null,
+        msgOf(a) ? h('div', { class: 'note' }, 'Client wrote: ' + msgOf(a)) : null),
       h('div', { class: 'right' }, pill(a.status), h('span', { class: 'price num' }, isAdmin() && pay ? money(+pay.amount + +pay.tip) : money(a.price))),
       acts.childNodes.length ? acts : null);
   }
@@ -616,7 +622,8 @@
         h('dt', {}, 'Reminder'), h('dd', {}, a.reminder_sent_at ? 'Sent ' + T.date(a.reminder_sent_at) + ' ' + T.time(a.reminder_sent_at) : 'Not sent'),
         a.confirmed_at ? [h('dt', {}, 'Confirmed'), h('dd', {}, T.date(a.confirmed_at) + ' ' + T.time(a.confirmed_at))] : null,
         a.cancelled_at ? [h('dt', {}, 'Cancelled'), h('dd', {}, `${T.date(a.cancelled_at)} by ${a.cancelled_by || 'shop'}${a.cancel_reason ? ': ' + a.cancel_reason : ''}`)] : null,
-        a.client_message ? [h('dt', {}, 'Client wrote'), h('dd', {}, a.client_message)] : null),
+        msgOf(a) ? [h('dt', {}, 'Client wrote'), h('dd', {}, msgOf(a))] : null,
+        refOf(a) ? [h('dt', {}, 'Reference photo'), h('dd', {}, h('a', { href: refOf(a), target: '_blank', rel: 'noopener' }, h('img', { class: 'ref-big', src: refOf(a), alt: 'Client reference photo' })))] : null),
       actions,
       h('div', { class: 'row' }, resched, cancelBox),
       field('Staff note', note), h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { await run(() => LC.update('appointments', a.id, { internal_note: note.value }), 'Note saved'); refresh(['appointments']); } }, 'Save note'),

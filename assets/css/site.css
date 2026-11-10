@@ -650,3 +650,28 @@ html.intro-on { overflow: hidden; }
 .intro.out { opacity: 0; pointer-events: none; }
 .intro-skip { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); font: 600 .78rem/1 Rajdhani, Archivo, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #d2b46a; background: transparent; border: 1px solid rgb(210 180 106 / 40%); border-radius: 999px; padding: 10px 16px; cursor: pointer; }
 .intro-skip:focus-visible { outline: 2px solid #f3efe6; outline-offset: 2px; }
+
+/* Homepage "bring a reference" callout under the portfolio carousel */
+.ref-cta { margin: 28px auto 18px; max-width: 980px; display: grid; grid-template-columns: 1fr auto; gap: 20px 32px; align-items: center; padding: 24px 26px; border-radius: 20px; background: var(--ink); color: var(--on-ink); border: 1px solid rgb(210 180 106 / 35%); }
+.ref-cta .kicker { margin: 0 0 6px; }
+.ref-cta h3 { margin: 0 0 8px; font: 400 clamp(1.7rem, 3.4vw, 2.3rem)/1 var(--display); letter-spacing: .02em; color: var(--on-ink); }
+.ref-cta p { margin: 0; color: var(--on-ink-muted); line-height: 1.6; max-width: 40em; }
+.ref-acts { display: flex; flex-direction: column; gap: 10px; }
+.ref-acts .btn:not(.gold) { --bg: transparent; --fg: var(--on-ink); border-color: rgb(243 239 230 / 28%); }
+@media (max-width: 720px) { .ref-cta { grid-template-columns: 1fr; padding: 20px; } .ref-acts { flex-direction: row; flex-wrap: wrap; } .ref-acts .btn { flex: 1 1 160px; } }
+
+/* Reference photo in the booking sheet */
+.ref-box { border: 1px dashed var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 10px; }
+.ref-box .ref-row { display: flex; gap: 12px; align-items: center; }
+.ref-box .ref-row img { width: 64px; height: 80px; object-fit: cover; border-radius: 10px; flex: none; }
+.ref-box .ref-row b { display: block; }
+.ref-box .ref-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.ref-pick { display: grid; gap: 12px; }
+.ref-pick .ref-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+.ref-pick .ref-chips button { flex: none; font: 600 .82rem/1 var(--body); padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+.ref-pick .ref-chips button[aria-pressed="true"] { background: var(--ink); color: var(--gold); border-color: var(--ink); }
+.ref-pick .ref-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ref-pick .ref-grid button { padding: 0; border: 2px solid transparent; border-radius: 12px; overflow: hidden; aspect-ratio: 4 / 5; cursor: pointer; background: var(--paper-2); }
+.ref-pick .ref-grid button[aria-pressed="true"] { border-color: var(--gold); }
+.ref-pick .ref-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.field .lbl { font-size: .85rem; font-weight: 600; }

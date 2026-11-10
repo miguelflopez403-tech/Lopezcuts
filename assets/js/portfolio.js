@@ -65,6 +65,13 @@
   lb.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
   lb.addEventListener('touchend', e => { if (tx == null) return; const dx = e.changedTouches[0].clientX - tx; tx = null; if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1); });
   $('#lbClose').addEventListener('click', () => lb.close());
+  // "Use as my reference": remember the photo and open booking; the booking sheet shows it and sends it to Miguel.
+  $('#lbUse').addEventListener('click', () => {
+    const p = view[at]; if (!p) return;
+    try { localStorage.setItem('lopezcuts-ref', JSON.stringify({ id: p.id, url: new URL(p.image_url, location.origin).href, cat: catOf(p) })); } catch { }
+    location.href = '/#book';
+  });
+  if (location.hash === '#pick') document.body.classList.add('picking');
   lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
 
   async function load() {

@@ -425,3 +425,8 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
 @media (max-width: 860px) {
   body:not([data-view="schedule"]):not([data-view="calendar"]) .top { position: static; }
 }
+
+/* Client reference photo on appointments */
+.note.ref-note { display: flex; align-items: center; gap: 8px; }
+.note.ref-note img { width: 34px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; }
+img.ref-big { width: 160px; max-width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px; display: block; border: 1px solid var(--line); }

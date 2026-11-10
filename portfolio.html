@@ -63,6 +63,13 @@
   .pf-count { color: var(--muted); font-size: .92rem; margin: 0 0 14px; }
   .pf-more { display: flex; justify-content: center; margin-top: 22px; }
   .pf-empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  .pf-steps { list-style: none; margin: 22px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+  .pf-steps li { display: flex; align-items: center; gap: 10px; padding: 10px 14px 10px 10px; border: 1px solid var(--line-ink); border-radius: 999px; background: var(--ink-2); color: var(--on-ink); font-size: .92rem; }
+  .pf-steps b { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--ink); font: 600 .85rem/1 var(--body); }
+  .lb-ref { display: flex; justify-content: center; padding-bottom: 6px; }
+  .pf-pick-note { display: none; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: .95rem; }
+  .pf-pick-note b { color: var(--gold); }
+  .picking .pf-pick-note { display: block; }
   @media (max-width: 1000px) { .pf-grid { grid-template-columns: repeat(3, 1fr); } }
   @media (max-width: 640px) { .pf-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .pf-cap { font-size: .78rem; padding: 22px 9px 8px; } .pf-cap small { display: none; } }
 </style>
@@ -97,13 +104,19 @@
     <div class="wrap">
       <p class="crumbs"><a href="/">Lopez Cuts</a> / Portfolio</p>
       <h1>Full <span class="gold">portfolio.</span></h1>
-      <p class="lede">Every cut, newest first. I add fresh photos almost every day, so check back to see what just left the chair.</p>
+      <p class="lede">Every cut, newest first. I add fresh photos almost every day. Find a cut you like, tap it, and hit <b class="gold">Use as my reference</b>. It gets added to your booking so I know exactly what you want.</p>
+      <ol class="pf-steps" aria-label="How to book with a reference">
+        <li><b>1</b><span>Tap a cut you like</span></li>
+        <li><b>2</b><span>Use as my reference</span></li>
+        <li><b>3</b><span>Pick your time and book</span></li>
+      </ol>
     </div>
   </section>
 
   <section class="band paper" style="padding-top:28px">
     <div class="wrap">
       <div class="pf-bar" id="pfBar" role="group" aria-label="Filter by cut"></div>
+      <p class="pf-pick-note" id="pick">Pick your reference: tap the cut you want, then <b>Use as my reference</b>.</p>
       <p class="pf-count" id="pfCount" aria-live="polite">Loading photos…</p>
       <ul class="pf-grid" id="pfGrid"></ul>
       <div class="pf-more"><button class="btn" type="button" id="pfMore" hidden>Show more</button></div>
@@ -153,6 +166,7 @@
   <button class="icon-btn lb-close" type="button" id="lbClose" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
   <div class="lb-media" id="lbMedia"></div>
   <div class="lb-cap" id="lbCap"></div>
+  <div class="lb-ref"><button class="btn gold" type="button" id="lbUse">Use as my reference</button></div>
 </dialog>
 
 <script src="/assets/js/config.js"></script>
