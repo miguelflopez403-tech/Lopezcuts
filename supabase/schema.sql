@@ -291,7 +291,8 @@ create table if not exists public.portfolio_items (
   category    text not null default 'Fades',         -- Fades, Tapers, Lineups, Designs, Beards, Curly
   description text not null default '',
   image_url   text,                                  -- null = show a placeholder tile
-  published   boolean not null default true,
+  published   boolean not null default true,         -- shows on the Full portfolio page
+  on_homepage boolean not null default true,         -- also shows in the homepage carousel
   sort        int not null default 0,
   created_at  timestamptz not null default now()
 );
