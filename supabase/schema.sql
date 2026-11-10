@@ -72,7 +72,7 @@ create table if not exists public.settings (
   cancel_cutoff_hours  int not null default 6 check (cancel_cutoff_hours between 0 and 72),
   avoid_gaps           boolean not null default true,     -- only offer times that don't leave unusable gaps
   booksy_rating        numeric(2,1) not null default 5.0,
-  booksy_review_count  int not null default 34,
+  booksy_review_count  int not null default 35,
   updated_at           timestamptz not null default now()
 );
 alter table public.settings add column if not exists avoid_gaps boolean not null default true;
