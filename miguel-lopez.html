@@ -37,7 +37,7 @@
     "@id": "https://www.lopezcuts.com/#miguel"
    },
    "primaryImageOfPage": "https://www.lopezcuts.com/assets/img/portfolio/taper-fade-miles.jpg",
-   "dateModified": "2026-11-09"
+   "dateModified": "2026-11-10"
   },
   {
    "@type": "Person",
@@ -46,7 +46,7 @@
    "givenName": "Miguel",
    "familyName": "Lopez",
    "jobTitle": "Barber and founder of Lopez Cuts",
-   "description": "Salt Lake City barber from the DC/Virginia area (DMV). Founder of Lopez Cuts and a student at the University of Utah.",
+   "description": "Salt Lake City barber from the DC/Virginia area (DMV). Founder of Lopez Cuts and an Information Systems student at the University of Utah David Eccles School of Business, with minors in AI and Marketing.",
    "url": "https://www.lopezcuts.com/miguel-lopez",
    "image": "https://www.lopezcuts.com/assets/img/icon-512.png",
    "email": "miguel@lopezcuts.com",
@@ -55,8 +55,14 @@
    },
    "affiliation": {
     "@type": "CollegeOrUniversity",
-    "name": "University of Utah",
+    "name": "University of Utah, David Eccles School of Business",
     "sameAs": "https://www.utah.edu/"
+   },
+   "hasCredential": {
+    "@type": "EducationalOccupationalCredential",
+    "name": "B.S. in Information Systems (expected 2028)",
+    "credentialCategory": "degree",
+    "recognizedBy": { "@type": "CollegeOrUniversity", "name": "University of Utah" }
    },
    "homeLocation": {
     "@type": "City",
@@ -72,7 +78,10 @@
     "Mod cuts",
     "Scissor cuts",
     "Curly hair",
-    "Beard trims"
+    "Beard trims",
+    "Information systems",
+    "Artificial intelligence",
+    "Marketing"
    ],
    "sameAs": [
     "https://www.instagram.com/lopezcuts.dmv/",
@@ -98,6 +107,22 @@
      "acceptedAnswer": {
       "@type": "Answer",
       "text": "In Salt Lake City, close to the University of Utah. The exact address is texted after you book. When he is back home in the DMV, he takes Hometown Haircut bookings there."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "How did Miguel Lopez start cutting hair?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "It started as a joke upstairs at his mom's house, when his friend Carlos asked him to cut the sides of his head. More friends kept trusting him to practice on them, and that turned into Lopez Cuts."
+     }
+    },
+    {
+     "@type": "Question",
+     "name": "What does Miguel Lopez study?",
+     "acceptedAnswer": {
+      "@type": "Answer",
+      "text": "Information Systems at the University of Utah David Eccles School of Business, with minors in AI and Marketing. He is on track to graduate in spring 2028."
      }
     },
     {
@@ -167,7 +192,7 @@
   .spec div { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; }
   .spec b { font-weight: 700; }
   .spec span { color: var(--muted); font-size: .9rem; }
-  .timeline { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .timeline { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
   .timeline li { border-top: 2px solid var(--gold); padding-top: 16px; }
   .timeline .when { font: 400 1.4rem/1 var(--display); color: var(--gold); letter-spacing: .04em; }
   .timeline h3 { margin: 8px 0 6px; font-size: 1.05rem; }
@@ -183,6 +208,23 @@
   .links span { color: var(--on-ink-muted); font-size: .88rem; overflow-wrap: anywhere; }
   .crumbs { font-size: .85rem; color: var(--on-ink-muted); }
   .crumbs a { color: var(--on-ink-muted); }
+  .story2 { display: grid; grid-template-columns: .8fr 1.2fr; gap: clamp(24px, 5vw, 64px); align-items: start; }
+  .story2-text p { font-size: clamp(1.02rem, 1.6vw, 1.12rem); line-height: 1.75; margin: 0 0 16px; max-width: 38em; }
+  .pull { margin: 26px 0 0; padding: 4px 0 4px 20px; border-left: 3px solid var(--gold); font: 400 clamp(1.5rem, 3vw, 2.1rem)/1.15 var(--display); letter-spacing: .02em; }
+  .promise { list-style: none; counter-reset: p; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .promise li { counter-increment: p; border: 1px solid var(--line-ink); border-radius: 18px; padding: 22px 20px; display: flex; flex-direction: column; gap: 8px; background: var(--ink-2); }
+  .promise li::before { content: counter(p, decimal-leading-zero); font: 400 1.6rem/1 var(--display); color: var(--gold); }
+  .promise b { font-size: 1.1rem; }
+  .promise span { color: var(--on-ink-muted); line-height: 1.6; }
+  .fav-tag { align-self: flex-start; font: 600 .72rem/1 var(--body); font-style: normal; letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: var(--gold); border-radius: 999px; padding: 5px 9px; margin-bottom: 4px; }
+  .spec.fav { border-color: var(--gold); }
+  .timeline li.next { border-top-style: dashed; }
+  .otc { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line-ink); }
+  .otc li { padding: 22px 18px; border-right: 1px solid var(--line-ink); display: flex; flex-direction: column; gap: 6px; }
+  .otc li:last-child { border-right: 0; }
+  .otc b { font: 400 clamp(1.4rem, 2.6vw, 1.9rem)/1.05 var(--display); color: var(--gold); letter-spacing: .03em; }
+  .otc span { font-size: .9rem; color: var(--on-ink-muted); line-height: 1.5; }
+  @media (max-width: 860px) { .story2 { grid-template-columns: 1fr; } .promise { grid-template-columns: 1fr; } .otc { grid-template-columns: 1fr 1fr; } .otc li:nth-child(2) { border-right: 0; } .otc li:nth-child(-n+2) { border-bottom: 1px solid var(--line-ink); } }
   @media (max-width: 860px) { .pro-grid { grid-template-columns: 1fr; } .specs { grid-template-columns: 1fr 1fr; } .timeline { grid-template-columns: 1fr; } .creds { grid-template-columns: 1fr 1fr; } .creds li:nth-child(2) { border-right: 0; } .creds li:nth-child(-n+2) { border-bottom: 1px solid var(--line-ink); } }
   @media (max-width: 520px) { .specs { grid-template-columns: 1fr; } .pro-photos img:last-child { margin-top: 24px; } }
 </style>
@@ -212,8 +254,8 @@
       <div class="pro-grid">
         <div>
           <h1>Miguel <span class="gold">Lopez</span></h1>
-          <p class="pro-title">Barber &amp; Founder, Lopez Cuts · Salt Lake City, UT</p>
-          <p class="lede">Precision fades, modern mullets and scissor work for 250+ clients in Salt Lake City, most of them University of Utah students. Trained on the DC/Virginia client base he built in high school.</p>
+          <p class="pro-title">Barber &amp; Founder, Lopez Cuts · Information Systems, University of Utah</p>
+          <p class="lede">I started with a pair of clippers and a couple of friends who trusted me. Today I cut for 250+ clients in Salt Lake City while finishing a business degree at the University of Utah. Every cut gets the same thing: I listen first, then I give you exactly what you asked for.</p>
           <div class="row">
             <a class="btn gold" href="/#book">Book with Miguel</a>
             <a class="btn ghost" href="https://www.instagram.com/lopezcuts.dmv/" target="_blank" rel="noopener me">@lopezcuts.dmv</a>
@@ -236,15 +278,41 @@
   </section>
 
   <section class="band paper">
+    <div class="wrap story2">
+      <div>
+        <p class="kicker">How it started</p>
+        <h2>Upstairs at my <span class="gold">mom's house.</span></h2>
+      </div>
+      <div class="story2-text">
+        <p>Me and two of my buddies were hanging out in my room when my boy Carlos asked me to cut just the sides of his head. We messed around with the clippers, laughing, half joking that one day it would be "Lopez Cuts" and telling me I should really start cutting hair.</p>
+        <p>Then it stopped being a joke. One by one, more friends sat down in that chair and let me practice on them. That trust is still the whole business.</p>
+        <blockquote class="pull">"They put their trust in me knowing it would pay off one day."</blockquote>
+      </div>
+    </div>
+  </section>
+
+  <section class="band ink">
+    <div class="wrap">
+      <p class="kicker">In the chair</p>
+      <h2>What every client <span class="gold">should leave with.</span></h2>
+      <ol class="promise">
+        <li><b>Listened to.</b><span>You tell me what you want, I ask the right questions, and we agree on the look before the clippers come on.</span></li>
+        <li><b>Exactly what you asked for.</b><span>Not my version of your cut. Yours, finished down to the last mirror check.</span></li>
+        <li><b>Confident enough to tell a friend.</b><span>If you'd send your best friend to me, or leave a review, I did my job.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band paper">
     <div class="wrap">
       <p class="kicker">Specialties</p>
       <h2>What Miguel <span class="gold">cuts best.</span></h2>
       <ul class="specs">
         <li class="spec"><img src="/assets/img/portfolio/taper-fade-miles.jpg" alt="Taper fades by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Taper fades</b><span>Clean, low to high, blended tight.</span></div></li>
-        <li class="spec"><img src="/assets/img/portfolio/seby-burst-fade.jpg" alt="Burst fades by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Burst fades</b><span>Rounded fade around the ear.</span></div></li>
+        <li class="spec fav"><img src="/assets/img/portfolio/seby-burst-fade.jpg" alt="Burst fades by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><i class="fav-tag">Miguel's favorite</i><b>Burst fades</b><span>"So clean. One of the most rewarding cuts I learned in high school."</span></div></li>
         <li class="spec"><img src="/assets/img/portfolio/modern-mullet-noah.jpg" alt="Modern mullets by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Modern mullets</b><span>Short sides, length in the back.</span></div></li>
         <li class="spec"><img src="/assets/img/portfolio/burst-mullet-gio.jpg" alt="Burst mullets by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Burst mullets</b><span>A burst fade with mullet length.</span></div></li>
-        <li class="spec"><img src="/assets/img/portfolio/mod-cut-gus.jpg" alt="Mod cuts by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Mod cuts</b><span>Textured, fuller fringe.</span></div></li>
+        <li class="spec fav"><img src="/assets/img/portfolio/mod-cut-gus.jpg" alt="Mod cuts by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><i class="fav-tag">Miguel's favorite</i><b>Mod cuts</b><span>"I love the layer-by-layer scissor work it takes to finish one."</span></div></li>
         <li class="spec"><img src="/assets/img/portfolio/scissor-work-james.jpg" alt="Scissor cuts & curls by Miguel Lopez, Salt Lake City barber" width="480" height="600" loading="lazy"><div><b>Scissor cuts & curls</b><span>Shears for length, curls and texture.</span></div></li>
       </ul>
       <p style="margin-top:18px"><a class="link" href="/#work">See the full portfolio &rarr;</a></p>
@@ -259,7 +327,22 @@
         <li><span class="when">2022</span><h3>Founded in DC / Virginia</h3><p>Started Lopez Cuts in high school and built a steady client base across the DMV.</p></li>
         <li><span class="when">University of Utah</span><h3>Rebuilt in Salt Lake City</h3><p>Moved for school, started over from zero, and grew to 250+ clients in about a year and a half.</p></li>
         <li><span class="when">2026</span><h3>Launched lopezcuts.com</h3><p>Own online booking with live openings, so clients book directly in about a minute.</p></li>
+        <li><span class="when">Spring 2028</span><h3>Graduating in three years</h3><p>B.S. in Information Systems from the David Eccles School of Business, with minors in AI and Marketing.</p></li>
+        <li class="next"><span class="when">Next</span><h3>A hand-picked team</h3><p>A few trusted barbers who deliver the same cut and the same feeling, plus more cosmetology, women's hair and men's color.</p></li>
       </ol>
+    </div>
+  </section>
+
+  <section class="band ink">
+    <div class="wrap">
+      <p class="kicker">Off the clock</p>
+      <h2>Barber by trade. <span class="gold">Business student by day.</span></h2>
+      <ul class="otc">
+        <li><b>Information Systems</b><span>B.S. at the University of Utah, David Eccles School of Business</span></li>
+        <li><b>AI + Marketing</b><span>Two minors that feed straight into how Lopez Cuts runs and grows</span></li>
+        <li><b>3 years</b><span>On track to finish college early, in spring 2028</span></li>
+        <li><b>Own booking app</b><span>lopezcuts.com booking, reminders and client tools, designed around his clients</span></li>
+      </ul>
     </div>
   </section>
 
@@ -269,6 +352,8 @@
       <h2>About <span class="gold">Miguel.</span></h2>
       <div class="qa-wrap">
         <details class="qa"><summary>Who is Miguel Lopez?</summary><p>Miguel Lopez is a barber in Salt Lake City, Utah, and the founder of Lopez Cuts (@lopezcuts.dmv). He is from the DC/Virginia area, studies at the University of Utah, and has cut for 250+ clients in Salt Lake City.</p></details>
+        <details class="qa"><summary>How did Miguel Lopez start cutting hair?</summary><p>It started as a joke upstairs at his mom's house, when his friend Carlos asked him to cut the sides of his head. More friends kept trusting him to practice on them, and that turned into Lopez Cuts.</p></details>
+        <details class="qa"><summary>What does Miguel Lopez study?</summary><p>Information Systems at the University of Utah David Eccles School of Business, with minors in AI and Marketing. He is on track to graduate in spring 2028.</p></details>
         <details class="qa"><summary>Where does Miguel Lopez cut hair?</summary><p>In Salt Lake City, close to the University of Utah. The exact address is texted after you book. When he is back home in the DMV, he takes Hometown Haircut bookings there.</p></details>
         <details class="qa"><summary>How do I book with Miguel Lopez?</summary><p>Book online at lopezcuts.com. It takes about a minute, with no app or account. A first cut is $25 and a returning cut is $30.</p></details>
         <details class="qa"><summary>Is Lopez Cuts the same as @lopezcuts.dmv on Instagram?</summary><p>Yes. @lopezcuts.dmv is Miguel's official Instagram, and lopezcuts.com is the official website and booking page.</p></details>
