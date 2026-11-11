@@ -139,7 +139,7 @@
 }
 </script>
 <script type="application/ld+json">
-{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How much is a haircut?", "acceptedAnswer": {"@type": "Answer", "text": "$25 for your first cut and $30 after that. Add a beard for +$5. Touch-ups are free."}}, {"@type": "Question", "name": "How long does a cut take?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 40 minutes, so you can fit it between classes or before work."}}, {"@type": "Question", "name": "Where are you located?", "acceptedAnswer": {"@type": "Answer", "text": "Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private."}}, {"@type": "Question", "name": "Do I need an app or an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. Book right on this site in about a minute with your name and phone number."}}, {"@type": "Question", "name": "How far ahead can I book?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 3 months ahead, and as late as 12 hours before an open time."}}, {"@type": "Question", "name": "Can I cancel or reschedule?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Use your booking link up to 6 hours before your appointment. Closer than that, just reply to Miguel’s text."}}, {"@type": "Question", "name": "What if something’s off after my cut?", "acceptedAnswer": {"@type": "Answer", "text": "Reach out and come back in. Touch-ups are free, especially for curly hair."}}, {"@type": "Question", "name": "What styles do you do?", "acceptedAnswer": {"@type": "Answer", "text": "Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "You pay after your cut. Zelle is preferred, and cash, Venmo and Apple Pay all work too."}}]}
+{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "How much is a haircut?", "acceptedAnswer": {"@type": "Answer", "text": "$25 for your first cut and $30 after that. Add a beard for +$5. Touch-ups are free."}}, {"@type": "Question", "name": "How long does a cut take?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 40 minutes, so you can fit it between classes or before work."}}, {"@type": "Question", "name": "Where are you located?", "acceptedAnswer": {"@type": "Answer", "text": "Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private."}}, {"@type": "Question", "name": "Do I need an app or an account?", "acceptedAnswer": {"@type": "Answer", "text": "No. Book right on this site in about a minute with your name and phone number."}}, {"@type": "Question", "name": "How far ahead can I book?", "acceptedAnswer": {"@type": "Answer", "text": "Up to 3 months ahead, and as late as 12 hours before an open time."}}, {"@type": "Question", "name": "How do I check when my appointment is?", "acceptedAnswer": {"@type": "Answer", "text": "Tap My appointment at the top of lopezcuts.com and enter the mobile number and first name you booked with. Your day and time show up right away."}}, {"@type": "Question", "name": "Can I cancel or reschedule?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Open the booking link from your confirmation text up to 6 hours before your appointment, then cancel and book a new time. Closer than that, just reply to Miguel’s text."}}, {"@type": "Question", "name": "What if something’s off after my cut?", "acceptedAnswer": {"@type": "Answer", "text": "Reach out and come back in. Touch-ups are free, especially for curly hair."}}, {"@type": "Question", "name": "What styles do you do?", "acceptedAnswer": {"@type": "Answer", "text": "Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one."}}, {"@type": "Question", "name": "How do I pay?", "acceptedAnswer": {"@type": "Answer", "text": "You pay after your cut. Zelle is preferred, and cash, Venmo and Apple Pay all work too."}}]}
 </script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="theme-color" content="#050505">
@@ -184,7 +184,7 @@
       <a href="#contact">Contact</a>
     </nav>
     <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn ghost sm" type="button" id="myBooking" hidden>My booking</button>
+      <button class="btn ghost sm" type="button" id="myBooking" data-lookup><span class="hide-xs">My appointment</span><span class="show-xs">My appt</span></button>
       <button class="btn gold sm" type="button" data-book>Book now</button>
     </div>
   </div>
@@ -310,7 +310,7 @@
       </div>
       <ol class="steps">
         <li data-reveal><span class="step-n">01</span><h3>Book right here</h3><p>Pick your service and an open time. It takes about a minute, no app or account needed.</p></li>
-        <li data-reveal><span class="step-n">02</span><h3>Get confirmed</h3><p>You get a confirmation right away, and Miguel texts you the day of your appointment with the address.</p></li>
+        <li data-reveal><span class="step-n">02</span><h3>Get confirmed</h3><p>You get a confirmation right away, and Miguel texts you the day of your appointment with the address. Forgot your time? Tap <button class="link-btn inline-link" type="button" data-lookup>My appointment</button> at the top.</p></li>
         <li data-reveal><span class="step-n">03</span><h3>Get your cut</h3><p>Show up, talk through the style you want, and sit back. Cuts take up to 40 minutes.</p></li>
         <li data-reveal><span class="step-n">04</span><h3>Pay &amp; rebook</h3><p>$25 for your first cut, $30 after, +$5 for a beard. Rebook from the same page for next time.</p></li>
       </ol>
@@ -405,7 +405,8 @@
         <details class="faq-item" data-reveal><summary>Where are you located?</summary><p>Salt Lake City, Utah. The exact address is sent with your confirmation text so it stays private.</p></details>
         <details class="faq-item" data-reveal><summary>Do I need an app or an account?</summary><p>No. Book right on this site in about a minute with your name and phone number.</p></details>
         <details class="faq-item" data-reveal><summary>How far ahead can I book?</summary><p>Up to 3 months ahead, and as late as 12 hours before an open time.</p></details>
-        <details class="faq-item" data-reveal><summary>Can I cancel or reschedule?</summary><p>Yes. Use your booking link up to 6 hours before your appointment. Closer than that, just reply to Miguel’s text.</p></details>
+        <details class="faq-item" data-reveal><summary>How do I check when my appointment is?</summary><p>Tap <button class="link-btn inline-link" type="button" data-lookup>My appointment</button> at the top of this site and enter the mobile number and first name you booked with. Your day and time show up right away. It’s also in your confirmation text and on your calendar if you added it.</p></details>
+        <details class="faq-item" data-reveal><summary>Can I cancel or reschedule?</summary><p>Yes. Open the booking link from your confirmation text (or the confirmation screen) up to 6 hours before your appointment, then cancel and book a new time. Closer than that, just reply to Miguel’s text.</p></details>
         <details class="faq-item" data-reveal><summary>What if something’s off after my cut?</summary><p>Reach out and come back in. Touch-ups are free, especially for curly hair.</p></details>
         <details class="faq-item" data-reveal><summary>What styles do you do?</summary><p>Taper fades, burst fades, modern and burst mullets, mod cuts, scissor cuts, lineups, curly hair and beards. Bring a photo if you have one.</p></details>
         <details class="faq-item" data-reveal><summary>How do I pay?</summary><p>You pay after your cut. Zelle is preferred, and cash, Venmo and Apple Pay all work too.</p></details>
@@ -456,7 +457,7 @@
       <h3 class="foot-h">Book</h3>
       <ul class="foot-list">
         <li><svg class="ic"><use href="#i-cal"/></svg><button class="link-btn" type="button" data-book>Book online</button></li>
-        <li><svg class="ic"><use href="#i-clock"/></svg><button class="link-btn" type="button" id="findBooking">Find my booking</button></li>
+        <li><svg class="ic"><use href="#i-clock"/></svg><button class="link-btn" type="button" data-lookup>Check my appointment</button></li>
         <li><svg class="ic"><use href="#i-star"/></svg><button class="link-btn" type="button" data-review>Leave a review</button></li>
       </ul>
     </div>

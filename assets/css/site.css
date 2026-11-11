@@ -675,3 +675,15 @@ html.intro-on { overflow: hidden; }
 .ref-pick .ref-grid button[aria-pressed="true"] { border-color: var(--gold); }
 .ref-pick .ref-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .field .lbl { font-size: .85rem; font-weight: 600; }
+
+/* My appointment lookup */
+.show-xs { display: none; }
+@media (max-width: 420px) { .hide-xs { display: none; } .show-xs { display: inline; } }
+.link-btn.inline-link { color: inherit; font-weight: 700; text-decoration: underline; text-decoration-color: var(--gold); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.lookup-form { display: grid; gap: 10px; }
+.lookup-out { display: grid; gap: 10px; }
+.lookup-out:empty { display: none; }
+.lookup-link { border-top: 1px solid var(--line); padding-top: 12px; }
+.lookup-link summary { cursor: pointer; font-weight: 600; font-size: .92rem; color: var(--muted); }
+.lookup-link[open] summary { margin-bottom: 10px; }
+.lookup-link .field { margin-bottom: 10px; }

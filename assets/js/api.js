@@ -395,6 +395,17 @@
         if (!c || !ok.includes(p_heard_from) || c.heard_from) return { ok: false };
         c.heard_from = p_heard_from; c.heard_from_at = new Date().toISOString(); commit('clients'); return { ok: true };
       },
+      find_appointment({ p_phone, p_first_name }) {
+        const phone = normPhone(p_phone); if (!phone) fail('Please enter the mobile number you booked with.');
+        const clean = v => String(v || '').trim().split(' ')[0].replace(/[^\p{L}]/gu, '').toLowerCase();
+        const first = clean(p_first_name); if (!first) fail('Please enter your first name.');
+        const c = db.clients.find(x => x.phone === phone && clean(x.full_name) === first);
+        if (!c) return { found: false, appointments: [] };
+        const list = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.ends_at) > Date.now())
+          .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at)).slice(0, 5)
+          .map(a => ({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price, service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name, addons: addonInfo(a.addon_ids).names }));
+        return { found: true, first_name: String(c.full_name).trim().split(' ')[0], appointments: list };
+      },
       get_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); return a ? bookingView(a) : null; },
       confirm_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); if (a && a.status === 'booked' && new Date(a.starts_at) > Date.now()) { a.status = 'confirmed'; a.confirmed_at = new Date().toISOString(); commit('appointments'); } return a ? bookingView(a) : null; },
       cancel_booking({ p_token, p_reason }) {
