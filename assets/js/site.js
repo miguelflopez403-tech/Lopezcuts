@@ -603,7 +603,6 @@
   function rememberBooking(r, extra = {}) { saveBookings([...allBookings().filter(b => b.token !== r.token), { token: r.token, starts_at: r.starts_at, ends_at: r.ends_at, ...extra }]); }
   function forgetBooking(token) { saveBookings(allBookings().filter(b => b.token !== token)); }
   function showMyBooking() { }  // the My appointment button is always shown; its sheet lists this device's bookings
-  window.addEventListener('hashchange', () => checkHash());
   function checkHash() { if (location.hash === '#book') { openBooking(); return; } if (location.hash === '#appointment') { openLookup(); return; } const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
   addEventListener('hashchange', checkHash);
   // ---------------- My appointment (lookup) ----------------
