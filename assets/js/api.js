@@ -353,7 +353,9 @@
       return { first_name: (c.full_name || '').split(' ')[0], starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price,
         service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name,
         addons: db.services.filter(x => a.addon_ids.includes(x.id)).map(x => x.name),
+        staff_id: a.staff_id, duration_min: Math.round((+new Date(a.ends_at) - +new Date(a.starts_at)) / 6e4),
         can_cancel: ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now() + s.cancel_cutoff_hours * 36e5,
+        can_reschedule: ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now() + s.cancel_cutoff_hours * 36e5,
         can_confirm: a.status === 'booked' && new Date(a.starts_at) > Date.now(),
         can_review: a.status === 'completed' && !reviewed, reviewed };
     }
@@ -413,6 +415,15 @@
         if (!a) fail('We couldn\'t find that booking.'); if (!['booked', 'confirmed'].includes(a.status)) fail('This booking can\'t be cancelled anymore.');
         if (new Date(a.starts_at) <= Date.now() + s.cancel_cutoff_hours * 36e5) fail(`It's too close to your appointment to cancel online. Please text ${s.phone}.`);
         Object.assign(a, { status: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'client', cancel_reason: String(p_reason || '').slice(0, 300) }); commit('appointments'); return bookingView(a);
+      },
+      reschedule_booking({ p_token, p_starts_at }) {
+        const a = db.appointments.find(x => x.manage_token === p_token); const s = S();
+        if (!a) fail('We couldn\'t find that booking.'); if (!['booked', 'confirmed'].includes(a.status)) fail('This booking can\'t be changed anymore.');
+        if (new Date(a.starts_at) <= Date.now() + s.cancel_cutoff_hours * 36e5) fail('It\'s too close to your appointment to change it online. Please reply to Miguel\'s text or DM @lopezcuts.dmv on Instagram.');
+        const startIso = new Date(p_starts_at).toISOString(); const dur = Math.round((+new Date(a.ends_at) - +new Date(a.starts_at)) / 6e4);
+        if (startIso === new Date(a.starts_at).toISOString()) fail('Please pick a different time.');
+        if (!slots(a.staff_id, T.day(startIso), dur, false).includes(startIso)) fail('Sorry, that time was just taken. Please pick another one.');
+        a.starts_at = startIso; a.ends_at = new Date(+new Date(startIso) + dur * 6e4).toISOString(); a.reminder_sent_at = null; commit('appointments'); return bookingView(a);
       },
       submit_review({ p_token, p_rating, p_body, p_display_name }) {
         const a = db.appointments.find(x => x.manage_token === p_token);

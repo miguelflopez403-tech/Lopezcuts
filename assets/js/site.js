@@ -550,7 +550,7 @@
         h('span', { class: 'what' }, `${r.service}${r.addons?.length ? ' + ' + r.addons.join(' + ') : ''} · ${r.staff}`)),
       h('p', { class: 'opt-label', style: 'margin-top:6px' }, 'Your booking link'),
       h('div', { class: 'linkbox' }, h('code', {}, manageUrl(r.token)), h('button', { class: 'btn sm ghost-dark', type: 'button', onclick: () => copy(manageUrl(r.token)) }, icon('copy'), 'Copy')),
-      h('p', { class: 'muted small' }, 'Save it to confirm, cancel or leave a review later. Forgot your time? Tap My appointment at the top of the site and enter your number and first name.'),
+      h('p', { class: 'muted small' }, 'Save it to confirm, change your time, cancel or leave a review later. Forgot your time? Tap My appointment at the top of the site and enter your number and first name.'),
       h('div', { class: 'done-actions' },
         h('a', { class: 'btn gold', href: gcal(r), target: '_blank', rel: 'noopener' }, icon('cal'), 'Add to Google Calendar'),
         h('button', { class: 'btn ghost-dark', type: 'button', onclick: () => sheet.close() }, 'Done')));
@@ -574,6 +574,7 @@
     const msg = h('div', { role: 'status' });
     const act = async (fn, okMsg) => { try { await fn(); toast(okMsg); openManage(token); } catch (e) { msg.replaceChildren(h('div', { class: 'err' }, e.message)); } };
     if (bk.can_confirm) view.push(h('button', { class: 'btn gold block', type: 'button', onclick: () => act(() => LC.rpc('confirm_booking', { p_token: token }), 'Confirmed. See you then!') }, icon('check'), 'Confirm I\'ll be there'));
+    if (bk.can_reschedule && bk.staff_id) view.push(h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openReschedule(token, bk) }, icon('cal'), 'Change day or time'));
     if (bk.can_cancel) {
       const reason = h('input', { id: 'cReason', placeholder: 'Reason (optional)', maxlength: '300' });
       const confirmRow = h('div', { class: 'field', hidden: true }, h('label', { for: 'cReason' }, 'Cancel this appointment?'), reason,
@@ -593,6 +594,51 @@
     if (bk.reviewed) view.push(h('p', { class: 'muted' }, 'Thanks for your review!'));
     view.push(msg, h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book another cut'));
     body.replaceChildren(h('div', { class: 'step-anim' }, view));
+  }
+  // Move a booking to another open time (same cutoff as cancelling).
+  async function openReschedule(token, bk) {
+    header('Change your time', 'Manage', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
+    const R = { days: [], day: null, slots: null, slot: null, busy: false, error: '' };
+    const dur = +bk.duration_min || 40;
+    const paint = () => {
+      const out = [h('div', { class: 'big-ticket' }, h('span', { class: 'what' }, 'Current time'), h('span', { class: 'when' }, T.date(bk.starts_at, { weekday: 'long', month: 'short', day: 'numeric' })), h('span', { style: 'font:400 1.6rem/1 var(--display)' }, `${T.time(bk.starts_at)} – ${T.time(bk.ends_at)}`))];
+      if (R.error) out.push(h('div', { class: 'err', role: 'alert' }, R.error));
+      out.push(h('p', { class: 'opt-label' }, 'Pick a new day'));
+      if (!R.days.length) out.push(h('div', { class: 'days' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: 'width:70px;height:84px;flex:none' }))));
+      else {
+        out.push(h('div', { class: 'days', role: 'group', 'aria-label': 'Choose a day' }, R.days.map(d => h('button', { class: 'day', type: 'button', disabled: !d.openings, 'aria-pressed': String(R.day === d.day), 'aria-label': `${T.dayLabel(d.day, { weekday: 'long', month: 'long', day: 'numeric' })}, ${d.openings ? d.openings + ' open' : 'no openings'}`, onclick: () => pickDay(d.day) },
+          h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : 'Full')))));
+        if (!R.day) out.push(h('div', { class: 'empty-slots' }, 'No other openings right now. DM @lopezcuts.dmv on Instagram and Miguel will try to fit you in.'));
+        else if (!R.slots) out.push(h('div', { class: 'slots' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton' }))));
+        else if (!R.slots.length) out.push(h('div', { class: 'empty-slots' }, 'That day just filled up. Try another day.'));
+        else out.push(h('p', { class: 'opt-label' }, T.dayLabel(R.day, { weekday: 'long', month: 'long', day: 'numeric' })),
+          h('div', { class: 'slots' }, R.slots.map(s => h('button', { class: 'slot', type: 'button', 'aria-pressed': String(R.slot === s), onclick: () => { R.slot = s; R.error = ''; paint(); } }, T.time(s)))));
+      }
+      out.push(h('button', { class: 'btn gold block', type: 'button', disabled: !R.slot || R.busy, onclick: save }, icon('check'), R.busy ? 'Moving…' : (R.slot ? `Move to ${T.dayLabel(R.day, { weekday: 'short', month: 'short', day: 'numeric' })} at ${T.time(R.slot)}` : 'Pick a new time')),
+        h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(token) }, 'Keep my current time'));
+      body.replaceChildren(h('div', { class: 'step-anim' }, out));
+    };
+    const pickDay = async day => {
+      R.day = day; R.slot = null; R.slots = null; paint();
+      try { const list = await LC.rpc('get_available_slots', { p_staff_id: bk.staff_id, p_day: day, p_duration: dur }); if (R.day === day) R.slots = (list || []).filter(s => +new Date(s) !== +new Date(bk.starts_at)); }
+      catch (e) { R.slots = []; R.error = e.message; }
+      paint();
+    };
+    const save = async () => {
+      if (!R.slot || R.busy) return; R.busy = true; R.error = ''; paint();
+      try {
+        const nb = await LC.rpc('reschedule_booking', { p_token: token, p_starts_at: R.slot });
+        if (nb && nb.starts_at) rememberBooking({ token, starts_at: nb.starts_at, ends_at: nb.ends_at });
+        toast('Moved. See you then!'); nextOpening(); openManage(token);
+      } catch (e) { R.busy = false; R.error = e.message || 'Something went wrong. Please try again.'; R.slot = null; if (R.day) pickDay(R.day); else paint(); }
+    };
+    paint();
+    try {
+      const days = await LC.rpc('get_open_days', { p_staff_id: bk.staff_id, p_from: T.today(), p_days: Math.min((+state.settings?.booking_window_days || 90) + 1, 93), p_duration: dur });
+      R.days = (days || []).filter(d => d.openings || d.day >= T.today()).slice(0, 93);
+      const first = R.days.find(d => d.openings);
+      if (first) await pickDay(first.day); else paint();
+    } catch (e) { R.error = e.message; R.days = [{ day: T.today(), openings: 0 }]; paint(); }
   }
   // This device remembers upcoming bookings so "My booking" in the top bar opens them.
   // Past visits stay for 60 days so the same device can leave a review.
@@ -639,7 +685,7 @@
         else if (!list.length) out.replaceChildren(h('p', { class: 'muted' }, `Hi ${r.first_name}! You don't have an upcoming appointment right now.`), h('button', { class: 'btn gold block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book a cut'));
         else out.replaceChildren(h('p', {}, h('b', {}, `Hi ${r.first_name}! `), list.length > 1 ? `You have ${list.length} upcoming appointments.` : 'Here\'s your next appointment.'),
           ...list.map(a => ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked'))),
-          h('p', { class: 'muted small' }, 'Miguel texts you the address the morning of. To cancel or change it, use the link in your confirmation text, or DM @lopezcuts.dmv.'));
+          h('p', { class: 'muted small' }, 'Miguel texts you the address the morning of. To cancel or change your time, use the link in your confirmation text or email, or DM @lopezcuts.dmv.'));
       } catch (err) { out.replaceChildren(h('div', { class: 'err' }, err.message || 'Something went wrong. Please try again.')); }
       go.disabled = false; goLabel.textContent = 'Find my appointment';
     });
@@ -647,7 +693,7 @@
     body.replaceChildren(h('div', { class: 'step-anim' },
       saved.length ? [h('p', { class: 'opt-label' }, 'Booked on this device'), ...saved.slice(0, 3).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('cal'), `${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} at ${T.time(b.starts_at)}`)), h('p', { class: 'opt-label' }, 'Or look it up')] : null,
       form, out,
-      h('details', { class: 'lookup-link' }, h('summary', {}, 'Have your booking link? Paste it to confirm or cancel'),
+      h('details', { class: 'lookup-link' }, h('summary', {}, 'Have your booking link? Paste it to confirm, change or cancel'),
         h('div', { class: 'field' }, h('label', { for: 'findLink' }, 'Booking link'), link),
         h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { const m = link.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, 'Open booking'))));
     if (!me.phone) setTimeout(() => ph.focus(), 50);
