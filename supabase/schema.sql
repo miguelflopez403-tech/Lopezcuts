@@ -661,7 +661,7 @@ declare
   v_appt     public.appointments%rowtype;
 begin
   select * into s from public.settings where id = 1;
-  if not s.booking_open then raise exception 'Online booking is paused right now. Please text % to book.', s.phone; end if;
+  if not s.booking_open then raise exception 'Online booking is paused right now. Please DM @lopezcuts.dmv on Instagram to book.'; end if;
   if length(v_name) < 2 or length(v_name) > 80 then raise exception 'Please enter your full name.'; end if;
   if v_phone is null then raise exception 'Please enter a valid phone number.'; end if;
   if v_email is not null and v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then raise exception 'That email address doesn''t look right.'; end if;
@@ -688,7 +688,7 @@ begin
     insert into public.clients (full_name, phone, email, source, created_by)
     values (v_name, v_phone, v_email, 'online', null) returning * into v_client;
   else
-    if v_client.blocked then raise exception 'Online booking isn''t available for this number. Please text % to book.', s.phone; end if;
+    if v_client.blocked then raise exception 'Online booking isn''t available for this number. Please DM @lopezcuts.dmv on Instagram to book.'; end if;
     if v_email is not null and v_client.email is null then
       update public.clients set email = v_email where id = v_client.id;
     end if;
@@ -697,7 +697,7 @@ begin
   select count(*) into v_active from public.appointments
   where client_id = v_client.id and status in ('booked', 'confirmed') and starts_at > now();
   if v_active >= s.max_active_bookings then
-    raise exception 'You already have % upcoming bookings. Text % if you need another.', v_active, s.phone;
+    raise exception 'You already have % upcoming bookings. DM @lopezcuts.dmv on Instagram if you need another.', v_active;
   end if;
 
   v_new := v_client.prior_visits = 0
@@ -761,7 +761,7 @@ begin
   if not found then raise exception 'We couldn''t find that booking.'; end if;
   if a.status not in ('booked', 'confirmed') then raise exception 'This booking can''t be cancelled anymore.'; end if;
   if a.starts_at <= now() + make_interval(hours => s.cancel_cutoff_hours) then
-    raise exception 'It''s too close to your appointment to cancel online. Please text %.', s.phone;
+    raise exception 'It''s too close to your appointment to cancel online. Please reply to Miguel''s text or DM @lopezcuts.dmv on Instagram.';
   end if;
   update public.appointments
      set status = 'cancelled', cancelled_at = now(), cancelled_by = 'client', cancel_reason = left(coalesce(p_reason, ''), 300)
@@ -1390,3 +1390,25 @@ begin
 end $$;
 revoke execute on function public.find_appointment(text, text) from public;
 grant execute on function public.find_appointment(text, text) to anon, authenticated;
+
+-- =====================================================================
+--  SAFETY PASS (also in updates/2026-11-11-safety-pass.sql)
+-- =====================================================================
+-- Extra locks. None of these change how the site works.
+-- 1. Pin where each helper looks things up, so nothing can be swapped in underneath it.
+alter function public.mfa_required() set search_path = public;
+alter function public.is_owner() set search_path = public;
+alter function public.is_admin() set search_path = public;
+alter function public.is_staff() set search_path = public;
+alter function public.norm_phone(text) set search_path = public;
+alter function public.client_ip() set search_path = public;
+-- 2. Dashboard-only actions already check who is signed in. This also stops
+--    visitors who aren't signed in from calling them at all.
+revoke execute on function public.staff_book(uuid, text, text, text, uuid, uuid[], uuid, timestamptz, numeric, text, boolean, text) from public, anon;
+revoke execute on function public.get_available_slots_staff(uuid, date, int) from public, anon;
+revoke execute on function public.complete_appointment(uuid, numeric, numeric, public.pay_method, text) from public, anon;
+revoke execute on function public.reopen_appointment(uuid) from public, anon;
+grant execute on function public.staff_book(uuid, text, text, text, uuid, uuid[], uuid, timestamptz, numeric, text, boolean, text) to authenticated;
+grant execute on function public.get_available_slots_staff(uuid, date, int) to authenticated;
+grant execute on function public.complete_appointment(uuid, numeric, numeric, public.pay_method, text) to authenticated;
+grant execute on function public.reopen_appointment(uuid) to authenticated;
