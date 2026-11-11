@@ -405,7 +405,7 @@
         if (!c) return { found: false, appointments: [] };
         const list = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.ends_at) > Date.now())
           .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at)).slice(0, 5)
-          .map(a => ({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price, service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name, addons: addonInfo(a.addon_ids).names }));
+          .map(a => ({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price, token: a.manage_token, service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name, addons: addonInfo(a.addon_ids).names }));
         return { found: true, first_name: String(c.full_name).trim().split(' ')[0], appointments: list };
       },
       get_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); return a ? bookingView(a) : null; },
