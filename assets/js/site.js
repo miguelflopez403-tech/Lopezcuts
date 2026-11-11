@@ -384,7 +384,7 @@
   $$('[data-book]').forEach(b => b.addEventListener('click', e => { if (b.id === 'homeBook' && !b.dataset.svc) return; if ('home' in b.dataset && !b.dataset.svc) { e.preventDefault(); document.getElementById('book')?.scrollIntoView({ behavior: 'smooth' }); return; } e.preventDefault(); openBooking(b.dataset.slot ? { day: b.dataset.day, slot: b.dataset.slot } : b.dataset.svc ? { serviceId: b.dataset.svc } : {}); }));
   $('#sheetClose').addEventListener('click', () => sheet.close());
   sheet.addEventListener('click', e => { if (e.target === sheet) sheet.close(); });
-  sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-') || location.hash === '#book') history.replaceState(null, '', location.pathname + location.search); });
+  sheet.addEventListener('close', () => { if (location.hash.startsWith('#manage-') || location.hash === '#book' || location.hash === '#appointment') history.replaceState(null, '', location.pathname + location.search); });
   backBtn.addEventListener('click', () => go(B.step - 1));
   nextBtn.addEventListener('click', () => next());
 
@@ -550,7 +550,7 @@
         h('span', { class: 'what' }, `${r.service}${r.addons?.length ? ' + ' + r.addons.join(' + ') : ''} · ${r.staff}`)),
       h('p', { class: 'opt-label', style: 'margin-top:6px' }, 'Your booking link'),
       h('div', { class: 'linkbox' }, h('code', {}, manageUrl(r.token)), h('button', { class: 'btn sm ghost-dark', type: 'button', onclick: () => copy(manageUrl(r.token)) }, icon('copy'), 'Copy')),
-      h('p', { class: 'muted small' }, 'Save it to confirm, cancel or leave a review later.'),
+      h('p', { class: 'muted small' }, 'Save it to confirm, cancel or leave a review later. Forgot your time? Tap My appointment at the top of the site and enter your number and first name.'),
       h('div', { class: 'done-actions' },
         h('a', { class: 'btn gold', href: gcal(r), target: '_blank', rel: 'noopener' }, icon('cal'), 'Add to Google Calendar'),
         h('button', { class: 'btn ghost-dark', type: 'button', onclick: () => sheet.close() }, 'Done')));
@@ -602,20 +602,58 @@
   function saveBookings(list) { try { localStorage.setItem('lopezcuts-bookings', JSON.stringify(list.slice(-8))); } catch { } showMyBooking(); }
   function rememberBooking(r, extra = {}) { saveBookings([...allBookings().filter(b => b.token !== r.token), { token: r.token, starts_at: r.starts_at, ends_at: r.ends_at, ...extra }]); }
   function forgetBooking(token) { saveBookings(allBookings().filter(b => b.token !== token)); }
-  function showMyBooking() {
-    const btn = $('#myBooking'); if (!btn) return; const next = savedBookings().sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at))[0];
-    btn.hidden = !next; if (next) btn.onclick = () => { location.hash = '#manage-' + next.token; };
-  }
+  function showMyBooking() { }  // the My appointment button is always shown; its sheet lists this device's bookings
   window.addEventListener('hashchange', () => checkHash());
-  function checkHash() { if (location.hash === '#book') { openBooking(); return; } const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
+  function checkHash() { if (location.hash === '#book') { openBooking(); return; } if (location.hash === '#appointment') { openLookup(); return; } const m = location.hash.match(/^#manage-([0-9a-f-]{36})$/i); if (m) openManage(m[1]); }
   addEventListener('hashchange', checkHash);
-  $('#findBooking').addEventListener('click', () => {
-    B.step = 9; sheet.showModal(); header('Find my booking', 'Manage', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
-    const inp = h('input', { id: 'findLink', placeholder: 'Paste your booking link' });
-    body.replaceChildren(h('div', { class: 'step-anim' }, h('p', { class: 'muted' }, 'Your booking link was shown when you booked and is in the confirmation text from Miguel.'), h('div', { class: 'field' }, h('label', { for: 'findLink' }, 'Booking link'), inp),
-      h('button', { class: 'btn gold block', type: 'button', onclick: () => { const m = inp.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, 'Open booking'),
-      h('p', { class: 'muted small' }, 'Lost it? Reply to Miguel\'s text or DM @lopezcuts.dmv on Instagram.')));
-  });
+  // ---------------- My appointment (lookup) ----------------
+  // Anyone can check their upcoming cut with the mobile number + first name they booked with.
+  // It only shows the time (no booking link), so nobody can change someone else's booking.
+  const ticket = (a, extra) => h('div', { class: 'big-ticket' },
+    h('span', { class: 'when' }, T.date(a.starts_at, { weekday: 'long', month: 'short', day: 'numeric' })),
+    h('span', { style: 'font:400 1.6rem/1 var(--display)' }, `${T.time(a.starts_at)} – ${T.time(a.ends_at)}`),
+    h('span', { class: 'what' }, `${a.service || 'Haircut'}${a.addons?.length ? ' + ' + a.addons.join(' + ') : ''}${a.staff ? ' · ' + a.staff : ''}`), extra || null);
+  function openLookup() {
+    B.step = 9; if (!sheet.open) sheet.showModal(); header('My appointment', 'Look it up', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
+    if (location.hash !== '#appointment') history.replaceState(null, '', '#appointment');
+    const saved = savedBookings().sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at));
+    const me = (() => { try { return JSON.parse(localStorage.getItem('lopezcuts-me') || 'null') || {}; } catch { return {}; } })();
+    const ph = h('input', { id: 'luPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', placeholder: '(801) 555-1234', value: me.phone || '' });
+    const nm = h('input', { id: 'luName', autocomplete: 'given-name', maxlength: '40', placeholder: 'e.g. Jordan', value: (me.name || '').split(' ')[0] });
+    const out = h('div', { role: 'status', 'aria-live': 'polite', class: 'lookup-out' });
+    const goLabel = h('span', {}, 'Find my appointment');
+    const go = h('button', { class: 'btn gold block', type: 'submit' }, icon('cal'), goLabel);
+    const form = h('form', { class: 'lookup-form', novalidate: true },
+      h('div', { class: 'field-row' },
+        h('div', { class: 'field' }, h('label', { for: 'luPhone' }, 'Mobile number'), ph),
+        h('div', { class: 'field' }, h('label', { for: 'luName' }, 'First name'), nm)),
+      h('span', { class: 'hint' }, 'Use the number and first name you booked with.'), go);
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!LC.normPhone(ph.value)) { toast('Please enter a valid mobile number'); ph.focus(); return; }
+      if (nm.value.trim().length < 1) { toast('Please enter your first name'); nm.focus(); return; }
+      go.disabled = true; goLabel.textContent = 'Looking…';
+      try {
+        const r = await LC.rpc('find_appointment', { p_phone: ph.value, p_first_name: nm.value });
+        const list = (r && r.appointments) || [];
+        if (!r || !r.found) out.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find a booking with that number and first name. Check for typos, or DM @lopezcuts.dmv on Instagram.', onBooksy() ? ' Booked through Booksy? Your time is in the Booksy app.' : ''));
+        else if (!list.length) out.replaceChildren(h('p', { class: 'muted' }, `Hi ${r.first_name}! You don't have an upcoming appointment right now.`), h('button', { class: 'btn gold block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book a cut'));
+        else out.replaceChildren(h('p', {}, h('b', {}, `Hi ${r.first_name}! `), list.length > 1 ? `You have ${list.length} upcoming appointments.` : 'Here\'s your next appointment.'),
+          ...list.map(a => ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked'))),
+          h('p', { class: 'muted small' }, 'Miguel texts you the address the morning of. To cancel or change it, use the link in your confirmation text, or DM @lopezcuts.dmv.'));
+      } catch (err) { out.replaceChildren(h('div', { class: 'err' }, err.message || 'Something went wrong. Please try again.')); }
+      go.disabled = false; goLabel.textContent = 'Find my appointment';
+    });
+    const link = h('input', { id: 'findLink', placeholder: 'Paste your booking link' });
+    body.replaceChildren(h('div', { class: 'step-anim' },
+      saved.length ? [h('p', { class: 'opt-label' }, 'Booked on this device'), ...saved.slice(0, 3).map(b => h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(b.token) }, icon('cal'), `${T.date(b.starts_at, { weekday: 'short', month: 'short', day: 'numeric' })} at ${T.time(b.starts_at)}`)), h('p', { class: 'opt-label' }, 'Or look it up')] : null,
+      form, out,
+      h('details', { class: 'lookup-link' }, h('summary', {}, 'Have your booking link? Paste it to confirm or cancel'),
+        h('div', { class: 'field' }, h('label', { for: 'findLink' }, 'Booking link'), link),
+        h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { const m = link.value.match(/manage-([0-9a-f-]{36})/i); if (m) openManage(m[1]); else toast('That link doesn\'t look right'); } }, 'Open booking'))));
+    if (!me.phone) setTimeout(() => ph.focus(), 50);
+  }
+  $$('[data-lookup]').forEach(b => b.addEventListener('click', openLookup));
 
   // ---------------- Leave a review ----------------
   function openReview() {
