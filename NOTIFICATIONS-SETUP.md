@@ -85,3 +85,17 @@ Bookings you add yourself in the dashboard don't send a notification. Employees 
 - **Test says it couldn't reach notify-owner:** step 2 isn't deployed, or the name isn't exactly `notify-owner`.
 - **Test works but bookings don't notify:** check the webhook in step 3 (table `appointments`, Insert and Update).
 - Supabase → Edge Functions → notify-owner → **Logs** shows each try. Send Claude a screenshot.
+
+## Confirmation emails for clients
+
+When a client books and gives an email, they get a confirmation email with the day, time, service
+and their private booking link. They also get an email if the booking is moved or cancelled.
+
+These only start sending after two steps, because Resend's shared test sender can only email you:
+
+1. Resend → **Domains** → **Add domain** → `lopezcuts.com`. Resend shows a few DNS records.
+   Add each one where your domain lives (Squarespace Domains → DNS settings), then press **Verify** in Resend.
+2. Supabase → **Edge Functions** → **Secrets** → add `EMAIL_FROM` = `Lopez Cuts <bookings@lopezcuts.com>` → Save.
+
+Then redeploy the `notify-owner` function with the code in `supabase/functions/notify-owner/index.ts`.
+To turn client emails off later, set `email_clients` to false in the settings table.

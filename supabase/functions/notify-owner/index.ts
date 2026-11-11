@@ -11,6 +11,9 @@
 // this function can read. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
 // Email alerts: add the secret RESEND_API_KEY (from resend.com). The address and on/off
 // switches are in the dashboard (Settings → Notifications).
+// Client emails: when a client gave an email, they get a confirmation (and an update if the
+// booking is moved or cancelled). These only send once the secret EMAIL_FROM is set to an
+// address on a domain verified in Resend, e.g. "Lopez Cuts <bookings@lopezcuts.com>".
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -102,7 +105,7 @@ Deno.serve(async (req) => {
 
   const [{ data: st }, { data: c }, { data: svc }] = await Promise.all([
     sb.from('settings').select('*').eq('id', 1).maybeSingle(),
-    sb.from('clients').select('full_name').eq('id', a.client_id).maybeSingle(),
+    sb.from('clients').select('full_name, email').eq('id', a.client_id).maybeSingle(),
     sb.from('services').select('name').eq('id', a.service_id).maybeSingle(),
   ]);
   const fmt = (t: string) => new Date(t).toLocaleString('en-US', { timeZone: st?.timezone || 'America/Denver', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -127,7 +130,13 @@ Deno.serve(async (req) => {
   // email only for client bookings and cancellations; your own bookings and confirmations are phone-only
   const emailOn = kind === 'booked' ? st?.email_bookings : kind === 'cancelled' && byClient ? st?.email_cancels : false;
   const emailed = emailOn !== false ? await sendEmail(st?.notify_email, msg, req) : 'off';
-  return json({ kind, sent, devices: want.length, emailed });
+  // the client's own copy (never blocks or fails the owner alert)
+  let clientEmail = 'off';
+  if (st?.email_clients !== false && kind !== 'confirmed') {
+    try { clientEmail = await sendClientEmail(kind, a, c, svc?.name ?? 'Haircut', st, payload.old_record?.starts_at ? fmt(payload.old_record.starts_at) : ''); }
+    catch (e: any) { clientEmail = 'failed: ' + String(e?.message || e).slice(0, 160); }
+  }
+  return json({ kind, sent, devices: want.length, emailed, clientEmail });
 });
 
 const lastErrors: string[] = [];
@@ -164,6 +173,52 @@ async function sendEmail(to: string | null | undefined, msg: Record<string, stri
       text: `${msg.body}\n\nOpen your dashboard: ${link}`,
       html: `<div style="font-family:Arial,sans-serif;font-size:16px;line-height:1.5"><p style="font-size:18px;margin:0 0 6px"><b>${esc(msg.title)}</b></p><p style="margin:0 0 16px">${esc(msg.body)}</p><p><a href="${link}" style="background:#d4b46a;color:#111;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open dashboard</a></p></div>`,
     }),
+  });
+  if (r.ok) return 'sent';
+  const j = await r.json().catch(() => ({}));
+  return 'failed: ' + String(j.message ?? r.statusText).slice(0, 200);
+}
+
+// Confirmation / change / cancellation email to the client. Needs EMAIL_FROM on a domain
+// verified in Resend: the shared onboarding@resend.dev sender can't deliver to clients.
+async function sendClientEmail(kind: string, a: any, c: any, service: string, st: any, oldWhen: string) {
+  const key = env('RESEND_API_KEY'); const from = env('EMAIL_FROM');
+  if (!key) return 'no RESEND_API_KEY secret';
+  if (!from || /resend\.dev/i.test(from)) return 'no EMAIL_FROM on your own domain yet';
+  const to = String(c?.email || '').trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return 'client gave no email';
+  const tz = st?.timezone || 'America/Denver';
+  const day = new Date(a.starts_at).toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
+  const t = (x: string) => new Date(x).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+  const time = `${t(a.starts_at)} – ${t(a.ends_at)}`;
+  const first = String(c?.full_name || '').trim().split(' ')[0] || 'there';
+  const site = String(st?.site_url || env('SITE_URL') || 'https://www.lopezcuts.com').replace(/\/+$/, '');
+  const link = `${site}/#manage-${a.manage_token}`;
+  const biz = st?.business_name || 'Lopez Cuts';
+  const price = a.price != null ? `$${Number(a.price).toFixed(0)}` : '';
+  const esc = (x: string) => String(x).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]!));
+  const byClient = a.cancelled_by === 'client';
+  const copy = ({
+    booked: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Here are your appointment details.', btn: 'View or change my booking', href: link },
+    manual: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Miguel added this appointment for you. Here are the details.', btn: 'View or change my booking', href: link },
+    moved: { subject: `New time: ${day} at ${t(a.starts_at)}`, head: 'Your appointment moved', lead: oldWhen ? `It was ${oldWhen}. Here is your new time.` : 'Here is your new time.', btn: 'View or change my booking', href: link },
+    cancelled: { subject: `Cancelled: ${day} at ${t(a.starts_at)}`, head: 'Your appointment was cancelled', lead: byClient ? 'You cancelled this appointment. Book a new time whenever you\'re ready.' : `Sorry, Miguel had to cancel this appointment.${a.cancel_reason ? ' Note: ' + String(a.cancel_reason).slice(0, 200) : ''}`, btn: 'Book a new time', href: site + '/#book' },
+  } as Record<string, Record<string, string>>)[kind];
+  if (!copy) return 'off';
+  const rows = [['When', `${day}, ${time}`], ['Service', service], ...(price && kind !== 'cancelled' ? [['Price', `${price} (pay after your cut)`]] : []), ['Where', 'Salt Lake City, UT. Miguel texts you the address the morning of.']];
+  const foot = kind === 'cancelled' ? '' : 'Need to change or cancel? Use the button above up to ' + (st?.cancel_cutoff_hours ?? 6) + ' hours before your appointment. You can also check your time anytime at ' + site + '/#appointment with your mobile number and first name.';
+  const text = `${copy.head}\n${copy.lead}\n\n${rows.map((r) => `${r[0]}: ${r[1]}`).join('\n')}\n\n${copy.btn}: ${copy.href}\n\n${foot}\n\n${biz}`;
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5;color:#111;max-width:520px">
+<p style="font-size:22px;margin:0 0 4px"><b>${esc(copy.head)}</b></p>
+<p style="margin:0 0 16px;color:#444">${esc(copy.lead)}</p>
+<table style="border-collapse:collapse;width:100%;margin:0 0 18px">${rows.map((r) => `<tr><td style="padding:8px 12px 8px 0;color:#666;vertical-align:top;white-space:nowrap">${esc(r[0])}</td><td style="padding:8px 0"><b>${esc(r[1])}</b></td></tr>`).join('')}</table>
+<p style="margin:0 0 18px"><a href="${esc(copy.href)}" style="background:#d4b46a;color:#111;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">${esc(copy.btn)}</a></p>
+${foot ? `<p style="margin:0 0 14px;color:#666;font-size:14px">${esc(foot)}</p>` : ''}
+<p style="margin:0;color:#666;font-size:14px">${esc(biz)} · Instagram @lopezcuts.dmv</p></div>`;
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to: [to], reply_to: st?.notify_email || undefined, subject: copy.subject, text, html }),
   });
   if (r.ok) return 'sent';
   const j = await r.json().catch(() => ({}));
