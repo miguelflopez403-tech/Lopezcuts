@@ -456,7 +456,7 @@
     if (B.error) out.push(h('div', { class: 'err', role: 'alert' }, B.error));
     out.push(h('p', { class: 'opt-label' }, 'Day'));
     out.push(B.days.length ? h('div', { class: 'days', role: 'group', 'aria-label': 'Choose a day' }, B.days.map(d => h('button', { class: 'day', type: 'button', disabled: !d.openings, 'aria-pressed': String(B.day === d.day), 'aria-label': `${T.dayLabel(d.day, { weekday: 'long', month: 'long', day: 'numeric' })}, ${d.openings ? d.openings + ' open' : 'no openings'}`, onclick: () => { B.day = d.day; B.slot = null; loadSlots(); } },
-      h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : (T.weekday(d.day) === 0 ? 'Closed' : 'Full')))))
+      h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : 'No times'))))
       : h('div', { class: 'days' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: 'width:70px;height:84px;flex:none' }))));
     if (!B.days.length) return out;
     if (!B.day) { out.push(h('div', { class: 'empty-slots' }, 'No openings in the next few weeks. DM @lopezcuts.dmv on Instagram and Miguel will try to fit you in.')); return out; }
@@ -579,7 +579,7 @@
     const label = { booked: 'Booked', confirmed: 'Confirmed', completed: 'Completed', no_show: 'Missed', cancelled: 'Cancelled' }[bk.status];
     const view = [
       h('div', { class: 'big-ticket' }, h('span', { class: 'price' }, money(bk.price)), h('span', { class: 'when' }, T.date(bk.starts_at, { weekday: 'long', month: 'short', day: 'numeric' })), h('span', { style: 'font:400 1.6rem/1 var(--display)' }, `${T.time(bk.starts_at)} – ${T.time(bk.ends_at)}`), h('span', { class: 'what' }, `${bk.service}${bk.addons?.length ? ' + ' + bk.addons.join(' + ') : ''} · ${bk.staff}`)),
-      h('p', {}, h('span', { class: 'status-pill ' + bk.status }, label), '  ', h('span', { class: 'muted' }, `Hi ${bk.first_name}.`)),
+      h('p', {}, h('span', { class: 'status-pill ' + bk.status }, label), '  ', h('span', { class: 'muted' }, `Hi ${bk.first_name}. ` + ({ cancelled: 'This appointment is cancelled. Nothing else to do.', completed: 'Thanks for coming in!', no_show: 'We missed you at this one.' }[bk.status] || 'You\'re all set.'))),
     ];
     const msg = h('div', { role: 'status' });
     const act = async (fn, okMsg) => { try { await fn(); toast(okMsg); openManage(token); } catch (e) { msg.replaceChildren(h('div', { class: 'err' }, e.message)); } };
@@ -617,7 +617,7 @@
       if (!R.days.length) out.push(h('div', { class: 'days' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton', style: 'width:70px;height:84px;flex:none' }))));
       else {
         out.push(h('div', { class: 'days', role: 'group', 'aria-label': 'Choose a day' }, R.days.map(d => h('button', { class: 'day', type: 'button', disabled: !d.openings, 'aria-pressed': String(R.day === d.day), 'aria-label': `${T.dayLabel(d.day, { weekday: 'long', month: 'long', day: 'numeric' })}, ${d.openings ? d.openings + ' open' : 'no openings'}`, onclick: () => pickDay(d.day) },
-          h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : 'Full')))));
+          h('span', { class: 'dw' }, d.day === T.today() ? 'Today' : T.dayLabel(d.day, { weekday: 'short' })), h('span', { class: 'dn' }, T.dayLabel(d.day, { day: 'numeric' })), h('span', { class: 'do' }, d.openings ? `${d.openings} open` : 'No times')))));
         if (!R.day) out.push(h('div', { class: 'empty-slots' }, 'No other openings right now. DM @lopezcuts.dmv on Instagram and Miguel will try to fit you in.'));
         else if (!R.slots) out.push(h('div', { class: 'slots' }, Array.from({ length: 6 }, () => h('div', { class: 'skeleton' }))));
         else if (!R.slots.length) out.push(h('div', { class: 'empty-slots' }, 'That day just filled up. Try another day.'));

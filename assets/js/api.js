@@ -371,7 +371,7 @@
       get_available_slots_staff({ p_staff_id, p_day, p_duration }) { if (!isStaff()) return []; return slots(p_staff_id, p_day, p_duration, true); },
       get_open_days({ p_staff_id, p_from, p_days, p_duration }) { const out = []; for (let i = 0; i < Math.min(p_days || 14, 93); i++) { const day = T.addDays(p_from, i); out.push({ day, openings: slots(p_staff_id, day, p_duration, false).length }); } return out; },
       book_appointment({ p_name, p_phone, p_email, p_service_id, p_addon_ids, p_staff_id, p_starts_at, p_note }) {
-        const s = S(); if (!s.booking_open) fail(`Online booking is paused right now. Please text ${s.phone} to book.`);
+        const s = S(); if (!s.booking_open) fail(`Online booking is paused right now. Please DM @lopezcuts.dmv on Instagram to book.`);
         const name = String(p_name || '').trim(); if (name.length < 2 || name.length > 80) fail('Please enter your full name.');
         const phone = normPhone(p_phone); if (!phone) fail('Please enter a valid phone number.');
         const email = String(p_email || '').trim().toLowerCase() || null; if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail('That email address doesn\'t look right.');
@@ -381,9 +381,9 @@
         if (!slots(p_staff_id, T.day(startIso, s.timezone), dur, false).includes(startIso)) fail('Sorry, that time was just taken. Please pick another one.');
         let c = db.clients.find(x => x.phone === phone);
         if (!c) { c = { id: uuid(), full_name: name, phone, email, birthday: null, notes: '', tags: [], marketing_opt_in: false, blocked: false, source: 'online', created_by: null, created_at: new Date().toISOString() }; db.clients.push(c); }
-        else { if (c.blocked) fail(`Online booking isn't available for this number. Please text ${s.phone} to book.`); if (email && !c.email) c.email = email; }
+        else { if (c.blocked) fail(`Online booking isn't available for this number. Please DM @lopezcuts.dmv on Instagram to book.`); if (email && !c.email) c.email = email; }
         const active = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now()).length;
-        if (active >= s.max_active_bookings) fail(`You already have ${active} upcoming bookings. Text ${s.phone} if you need another.`);
+        if (active >= s.max_active_bookings) fail(`You already have ${active} upcoming bookings. DM @lopezcuts.dmv on Instagram if you need another.`);
         const isNew = !(c.prior_visits > 0) && !db.appointments.some(a => a.client_id === c.id && a.status === 'completed');
         if (svc.first_visit_only && !isNew) fail('Welcome back! That option is for first visits. Please pick the returning client haircut.');
         const price = (isNew && svc.new_client_price != null ? +svc.new_client_price : +svc.price) + ad.price;
@@ -413,7 +413,7 @@
       cancel_booking({ p_token, p_reason }) {
         const a = db.appointments.find(x => x.manage_token === p_token); const s = S();
         if (!a) fail('We couldn\'t find that booking.'); if (!['booked', 'confirmed'].includes(a.status)) fail('This booking can\'t be cancelled anymore.');
-        if (new Date(a.starts_at) <= Date.now() + s.cancel_cutoff_hours * 36e5) fail(`It's too close to your appointment to cancel online. Please text ${s.phone}.`);
+        if (new Date(a.starts_at) <= Date.now() + s.cancel_cutoff_hours * 36e5) fail(`It's too close to your appointment to cancel online. Please reply to Miguel's text or DM @lopezcuts.dmv on Instagram.`);
         Object.assign(a, { status: 'cancelled', cancelled_at: new Date().toISOString(), cancelled_by: 'client', cancel_reason: String(p_reason || '').slice(0, 300) }); commit('appointments'); return bookingView(a);
       },
       reschedule_booking({ p_token, p_starts_at }) {
