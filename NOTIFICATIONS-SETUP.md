@@ -99,3 +99,7 @@ These only start sending after two steps, because Resend's shared test sender ca
 
 Then redeploy the `notify-owner` function with the code in `supabase/functions/notify-owner/index.ts`.
 To turn client emails off later, set `email_clients` to false in the settings table.
+
+### Reminder email the day before
+
+Run `supabase/updates/2026-11-11-reminder-emails.sql` once and redeploy the `notify-owner` function. Every hour the database checks for appointments 12 to 24 hours away and emails each client who gave an email, once per appointment time. Bookings made less than about a day ahead skip the reminder because they just got the confirmation.

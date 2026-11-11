@@ -14,6 +14,9 @@
 // Client emails: when a client gave an email, they get a confirmation (and an update if the
 // booking is moved or cancelled). These only send once the secret EMAIL_FROM is set to an
 // address on a domain verified in Resend, e.g. "Lopez Cuts <bookings@lopezcuts.com>".
+// Reminder emails: the database calls this hourly with { cron: 'reminders' } when an appointment
+// is 12 to 24 hours away. The function asks the database which ones are due and claims them,
+// so a fake call can only send reminders that were due anyway, and never twice.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -30,6 +33,32 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   const sb = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
   const payload = await req.json().catch(() => ({}));
+
+  // ---- hourly reminder emails (the day before) ----
+  if (payload?.cron === 'reminders') {
+    const { data: ids, error } = await sb.rpc('claim_email_reminders');
+    if (error) return json({ error: 'Reminders are not set up yet. Run the reminder emails SQL.' }, 500);
+    const { data: st } = await sb.from('settings').select('*').eq('id', 1).maybeSingle();
+    const results: string[] = [];
+    for (const id of ((ids ?? []) as string[]).slice(0, 50)) {
+      let res = 'failed';
+      const { data: a } = await sb.from('appointments').select('*').eq('id', id).maybeSingle();
+      try {
+        if (!a || !['booked', 'confirmed'].includes(a.status)) res = 'skipped';
+        else {
+          const [{ data: c }, { data: svc }] = await Promise.all([
+            sb.from('clients').select('full_name, email').eq('id', a.client_id).maybeSingle(),
+            sb.from('services').select('name').eq('id', a.service_id).maybeSingle(),
+          ]);
+          res = await sendClientEmail('reminder', a, c, svc?.name ?? 'Haircut', st, '');
+        }
+      } catch (e: any) { res = 'failed: ' + String(e?.message || e).slice(0, 160); }
+      // a failed send is released so the next hourly run tries again
+      if (res.startsWith('failed') && a) await sb.from('email_reminders').delete().eq('appointment_id', id).eq('starts_at', a.starts_at);
+      results.push(res);
+    }
+    return json({ kind: 'reminders', results });
+  }
 
   // ---- keys (made once, kept in the database) ----
   let { data: keys } = await sb.from('push_keys').select('*').eq('id', 1).maybeSingle();
@@ -202,6 +231,7 @@ async function sendClientEmail(kind: string, a: any, c: any, service: string, st
     booked: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Here are your appointment details.', btn: 'View or change my booking', href: link },
     manual: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Miguel added this appointment for you. Here are the details.', btn: 'View or change my booking', href: link },
     moved: { subject: `New time: ${day} at ${t(a.starts_at)}`, head: 'Your appointment moved', lead: oldWhen ? `It was ${oldWhen}. Here is your new time.` : 'Here is your new time.', btn: 'View or change my booking', href: link },
+    reminder: { subject: `Reminder: your cut is ${day} at ${t(a.starts_at)}`, head: `See you soon, ${first}!`, lead: 'A quick reminder about your appointment.', btn: 'View or change my booking', href: link },
     cancelled: { subject: `Cancelled: ${day} at ${t(a.starts_at)}`, head: 'Your appointment was cancelled', lead: byClient ? 'You cancelled this appointment. Book a new time whenever you\'re ready.' : `Sorry, Miguel had to cancel this appointment.${a.cancel_reason ? ' Note: ' + String(a.cancel_reason).slice(0, 200) : ''}`, btn: 'Book a new time', href: site + '/#book' },
   } as Record<string, Record<string, string>>)[kind];
   if (!copy) return 'off';
