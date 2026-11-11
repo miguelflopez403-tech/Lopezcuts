@@ -361,6 +361,9 @@
   const addonsPrice = () => addonList().filter(a => B.addons.has(a.id)).reduce((t, a) => t + +a.price, 0);
 
   try { const saved = JSON.parse(localStorage.getItem('lopezcuts-me') || 'null'); if (saved) Object.assign(B.form, saved); } catch { }
+  // Returning on the same device: details are already filled in, so the last step shows a short "Welcome back" card instead of the form.
+  const knownClient = () => B.form.name.trim().length >= 2 && !!LC.normPhone(B.form.phone);
+  B.known = knownClient(); B.editMe = false;
   // Reference photo: picked on /portfolio ("Use as my reference") or inside the booking sheet.
   // It rides along in the booking note as "Reference photo: <url>", and the owner dashboard shows the picture.
   const readRef = () => { try { const r = JSON.parse(localStorage.getItem('lopezcuts-ref') || 'null'); return r && r.url ? r : null; } catch { return null; } };
@@ -493,17 +496,23 @@
     if (B.picking) return stepPick();
     const f = B.form;
     const bind = (k) => e => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; };
+    const short = B.known && !B.editMe && knownClient();
+    const who = short
+      ? [h('div', { class: 'welcome-back' },
+          h('div', {}, h('b', {}, `Welcome back, ${f.name.trim().split(' ')[0]}!`), h('span', { class: 'muted small' }, [fmtPhone(LC.normPhone(f.phone)) || f.phone, f.email].filter(Boolean).join(' · '))),
+          h('button', { class: 'btn sm', type: 'button', onclick: () => { B.editMe = true; render(); $('#bName')?.focus(); } }, 'Not you? Edit'))]
+      : [h('div', { class: 'field' }, h('label', { for: 'bName' }, 'Full name'), h('input', { id: 'bName', autocomplete: 'name', required: true, value: f.name, oninput: bind('name'), maxlength: '80' })),
+        h('div', { class: 'field-row' },
+          h('div', { class: 'field' }, h('label', { for: 'bPhone' }, 'Mobile number'), h('input', { id: 'bPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, placeholder: '(801) 555-1234', value: f.phone, oninput: bind('phone') }), h('span', { class: 'hint' }, 'For your confirmation text. Never shared.')),
+          h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email (optional)'), h('input', { id: 'bEmail', type: 'email', autocomplete: 'email', value: f.email, oninput: bind('email') }), h('span', { class: 'hint' }, 'Add it to get a confirmation email.')))];
     return [
       B.error ? h('div', { class: 'err', role: 'alert' }, B.error) : null,
-      h('div', { class: 'field' }, h('label', { for: 'bName' }, 'Full name'), h('input', { id: 'bName', autocomplete: 'name', required: true, value: f.name, oninput: bind('name'), maxlength: '80' })),
-      h('div', { class: 'field-row' },
-        h('div', { class: 'field' }, h('label', { for: 'bPhone' }, 'Mobile number'), h('input', { id: 'bPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, placeholder: '(801) 555-1234', value: f.phone, oninput: bind('phone') }), h('span', { class: 'hint' }, 'For your confirmation text. Never shared.')),
-        h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email (optional)'), h('input', { id: 'bEmail', type: 'email', autocomplete: 'email', value: f.email, oninput: bind('email') }))),
+      ...who,
       refField(),
       h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '300', placeholder: 'Style you want, how short on the sides, first time, etc.', oninput: bind('note') }, f.note)),
       // Only asked on the First Time Haircut (most clients are regulars).
       svc().first_visit_only ? h('div', { class: 'field' }, h('label', { for: 'bFound' }, 'How did you find Miguel? (optional)'), h('select', { id: 'bFound', onchange: bind('found') }, h('option', { value: '' }, 'Pick one'), FOUND.map(([v, l]) => h('option', { value: v, selected: f.found === v }, l)))) : null,
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember my name and number on this device'),
+      short ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember me on this device so booking is faster next time'),
       h('div', { class: 'summary' },
         h('div', { class: 'row' }, h('span', {}, 'When'), h('b', {}, `${T.dayLabel(B.day, { weekday: 'long', month: 'short', day: 'numeric' })}, ${T.time(B.slot)}`)),
         h('div', { class: 'row' }, h('span', {}, 'Service'), h('b', {}, svc().name + (B.addons.size ? ' + ' + addonList().filter(a => B.addons.has(a.id)).map(a => a.name).join(' + ') : ''))),
@@ -517,17 +526,18 @@
     if (B.step === 1) { if (B.slot) go(2); return; }
     if (B.step === 2) {
       const f = B.form;
-      if (f.name.trim().length < 2) { B.error = 'Please enter your full name.'; render(); $('#bName')?.focus(); return; }
-      if (!LC.normPhone(f.phone)) { B.error = 'Please enter a valid mobile number.'; render(); $('#bPhone')?.focus(); return; }
+      if (f.name.trim().length < 2) { B.error = 'Please enter your full name.'; B.editMe = true; render(); $('#bName')?.focus(); return; }
+      if (!LC.normPhone(f.phone)) { B.error = 'Please enter a valid mobile number.'; B.editMe = true; render(); $('#bPhone')?.focus(); return; }
       B.busy = true; nextBtn.disabled = true; nextBtn.textContent = 'Booking…';
       try {
         const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: (f.note.trim().slice(0, 300) + (B.ref ? `\nReference photo: ${B.ref.url}` : '')).trim().slice(0, 500) });
         try { if (f.remember) localStorage.setItem('lopezcuts-me', JSON.stringify({ name: f.name, phone: f.phone, email: f.email, remember: true })); else localStorage.removeItem('lopezcuts-me'); } catch { }
         if (f.found && svc().first_visit_only && r?.token) LC.rpc('set_heard_from', { p_token: r.token, p_heard_from: f.found }).catch(() => { });
+        B.known = !!f.remember && knownClient(); B.editMe = false;
         rememberBooking(r); B.result = r; B.form.note = ''; saveRef(null); B.busy = false; go(3); nextOpening();
       } catch (e) {
         B.busy = false; B.error = e.message;
-        if (/taken/i.test(e.message)) { B.slot = null; go(1); B.error = e.message; } else render();
+        if (/taken/i.test(e.message)) { B.slot = null; go(1); B.error = e.message; } else { if (/name|number|email/i.test(e.message)) B.editMe = true; render(); }
       }
     }
   }
