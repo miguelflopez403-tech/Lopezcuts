@@ -687,3 +687,8 @@ html.intro-on { overflow: hidden; }
 .lookup-link summary { cursor: pointer; font-weight: 600; font-size: .92rem; color: var(--muted); }
 .lookup-link[open] summary { margin-bottom: 10px; }
 .lookup-link .field { margin-bottom: 10px; }
+
+/* Returning client on the same device */
+.welcome-back { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+.welcome-back > div { display: grid; gap: 2px; min-width: 0; }
+.welcome-back .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
