@@ -692,3 +692,6 @@ html.intro-on { overflow: hidden; }
 .welcome-back { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
 .welcome-back > div { display: grid; gap: 2px; min-width: 0; }
 .welcome-back .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Lookup: "link sent" note */
+.note-ok { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; font-weight: 600; }

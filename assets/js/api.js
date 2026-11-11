@@ -374,7 +374,7 @@
         const s = S(); if (!s.booking_open) fail(`Online booking is paused right now. Please DM @lopezcuts.dmv on Instagram to book.`);
         const name = String(p_name || '').trim(); if (name.length < 2 || name.length > 80) fail('Please enter your full name.');
         const phone = normPhone(p_phone); if (!phone) fail('Please enter a valid phone number.');
-        const email = String(p_email || '').trim().toLowerCase() || null; if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail('That email address doesn\'t look right.');
+        const email = String(p_email || '').trim().toLowerCase() || null; if (!email) fail('Please enter your email so we can send your confirmation.'); if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) fail('That email address doesn\'t look right.');
         const svc = db.services.find(x => x.id === p_service_id && x.active && x.bookable && !x.is_addon); if (!svc) fail('Please choose a service.');
         const ad = addonInfo(p_addon_ids); const dur = svc.duration_min + ad.dur;
         const startIso = new Date(p_starts_at).toISOString();
@@ -405,8 +405,13 @@
         if (!c) return { found: false, appointments: [] };
         const list = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.ends_at) > Date.now())
           .sort((a, b) => +new Date(a.starts_at) - +new Date(b.starts_at)).slice(0, 5)
-          .map(a => ({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price, token: a.manage_token, service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name, addons: addonInfo(a.addon_ids).names }));
+          .map(a => ({ starts_at: a.starts_at, ends_at: a.ends_at, status: a.status, price: a.price, can_email: !!c.email, service: (db.services.find(x => x.id === a.service_id) || {}).name, staff: (db.staff.find(x => x.id === a.staff_id) || {}).display_name, addons: addonInfo(a.addon_ids).names }));
         return { found: true, first_name: String(c.full_name).trim().split(' ')[0], appointments: list };
+      },
+      request_booking_link({ p_phone, p_first_name }) {
+        const phone = normPhone(p_phone); const clean = v => String(v || '').trim().split(' ')[0].replace(/[^\p{L}]/gu, '').toLowerCase();
+        const c = db.clients.find(x => x.phone === phone && clean(x.full_name) === clean(p_first_name));
+        return { sent: !!(c && c.email) };
       },
       get_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); return a ? bookingView(a) : null; },
       confirm_booking({ p_token }) { const a = db.appointments.find(x => x.manage_token === p_token); if (a && a.status === 'booked' && new Date(a.starts_at) > Date.now()) { a.status = 'confirmed'; a.confirmed_at = new Date().toISOString(); commit('appointments'); } return a ? bookingView(a) : null; },

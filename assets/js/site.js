@@ -362,7 +362,8 @@
 
   try { const saved = JSON.parse(localStorage.getItem('lopezcuts-me') || 'null'); if (saved) Object.assign(B.form, saved); } catch { }
   // Returning on the same device: details are already filled in, so the last step shows a short "Welcome back" card instead of the form.
-  const knownClient = () => B.form.name.trim().length >= 2 && !!LC.normPhone(B.form.phone);
+  const validEmail = v => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(v || '').trim());
+  const knownClient = () => B.form.name.trim().length >= 2 && !!LC.normPhone(B.form.phone) && validEmail(B.form.email);
   B.known = knownClient(); B.editMe = false;
   // Reference photo: picked on /portfolio ("Use as my reference") or inside the booking sheet.
   // It rides along in the booking note as "Reference photo: <url>", and the owner dashboard shows the picture.
@@ -504,7 +505,7 @@
       : [h('div', { class: 'field' }, h('label', { for: 'bName' }, 'Full name'), h('input', { id: 'bName', autocomplete: 'name', required: true, value: f.name, oninput: bind('name'), maxlength: '80' })),
         h('div', { class: 'field-row' },
           h('div', { class: 'field' }, h('label', { for: 'bPhone' }, 'Mobile number'), h('input', { id: 'bPhone', type: 'tel', inputmode: 'tel', autocomplete: 'tel', required: true, placeholder: '(801) 555-1234', value: f.phone, oninput: bind('phone') }), h('span', { class: 'hint' }, 'For your confirmation text. Never shared.')),
-          h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email (optional)'), h('input', { id: 'bEmail', type: 'email', autocomplete: 'email', value: f.email, oninput: bind('email') }), h('span', { class: 'hint' }, 'Add it to get a confirmation email.')))];
+          h('div', { class: 'field' }, h('label', { for: 'bEmail' }, 'Email'), h('input', { id: 'bEmail', type: 'email', inputmode: 'email', autocomplete: 'email', required: true, placeholder: 'you@example.com', value: f.email, oninput: bind('email'), maxlength: '200' }), h('span', { class: 'hint' }, 'For your confirmation and reminder. Never shared.')))];
     return [
       B.error ? h('div', { class: 'err', role: 'alert' }, B.error) : null,
       ...who,
@@ -528,6 +529,7 @@
       const f = B.form;
       if (f.name.trim().length < 2) { B.error = 'Please enter your full name.'; B.editMe = true; render(); $('#bName')?.focus(); return; }
       if (!LC.normPhone(f.phone)) { B.error = 'Please enter a valid mobile number.'; B.editMe = true; render(); $('#bPhone')?.focus(); return; }
+      if (!validEmail(f.email)) { B.error = f.email.trim() ? 'That email address doesn\'t look right.' : 'Please enter your email so we can send your confirmation.'; B.editMe = true; render(); $('#bEmail')?.focus(); return; }
       B.busy = true; nextBtn.disabled = true; nextBtn.textContent = 'Booking…';
       try {
         const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: (f.note.trim().slice(0, 300) + (B.ref ? `\nReference photo: ${B.ref.url}` : '')).trim().slice(0, 500) });
@@ -683,6 +685,20 @@
         h('div', { class: 'field' }, h('label', { for: 'luPhone' }, 'Mobile number'), ph),
         h('div', { class: 'field' }, h('label', { for: 'luName' }, 'First name'), nm)),
       h('span', { class: 'hint' }, 'Use the number and first name you booked with.'), go);
+    // Changing or cancelling needs the private link, which is only ever emailed to the address on the booking.
+    const linkBtn = () => {
+      const label = h('span', {}, 'Email me my change or cancel link');
+      const btn = h('button', { class: 'btn ghost-dark block', type: 'button' }, icon('cal'), label);
+      btn.addEventListener('click', async () => {
+        btn.disabled = true; label.textContent = 'Sending…';
+        try {
+          const r = await LC.rpc('request_booking_link', { p_phone: ph.value, p_first_name: nm.value });
+          if (r && r.sent) btn.replaceWith(h('div', { class: 'note-ok', role: 'status' }, 'Sent! Check your email for the link (and your spam folder). It can take a minute.'));
+          else { btn.disabled = false; label.textContent = 'Email me my change or cancel link'; toast('We couldn\'t send it. Please DM @lopezcuts.dmv on Instagram.'); }
+        } catch (err) { btn.replaceWith(h('div', { class: 'err', role: 'alert' }, err.message || 'Something went wrong. Please try again.')); }
+      });
+      return btn;
+    };
     form.addEventListener('submit', async e => {
       e.preventDefault();
       if (!LC.normPhone(ph.value)) { toast('Please enter a valid mobile number'); ph.focus(); return; }
@@ -695,8 +711,11 @@
         else if (!list.length) out.replaceChildren(h('p', { class: 'muted' }, `Hi ${r.first_name}! You don't have an upcoming appointment right now.`), h('button', { class: 'btn gold block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book a cut'));
         else out.replaceChildren(h('p', {}, h('b', {}, `Hi ${r.first_name}! `), list.length > 1 ? `You have ${list.length} upcoming appointments.` : 'Here\'s your next appointment.'),
           ...list.flatMap(a => [ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked')),
-            a.token ? h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(a.token) }, icon('cal'), 'Change or cancel this appointment') : null]),
-          h('p', { class: 'muted small' }, `Miguel texts you the address the morning of. You can change or cancel up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before. Closer than that, reply to Miguel's text or DM @lopezcuts.dmv.`));
+          ]),
+          list.some(a => a.can_email) ? linkBtn() : null,
+          h('p', { class: 'muted small' }, list.some(a => a.can_email)
+            ? `Miguel texts you the address the morning of. To change or cancel, we email your private link to the address you booked with, so only you can make changes. You can do it up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before.`
+            : 'Miguel texts you the address the morning of. To cancel or change your time, use the link in your confirmation text or email, or DM @lopezcuts.dmv.'));
       } catch (err) { out.replaceChildren(h('div', { class: 'err' }, err.message || 'Something went wrong. Please try again.')); }
       go.disabled = false; goLabel.textContent = 'Find my appointment';
     });
