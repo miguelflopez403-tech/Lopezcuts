@@ -694,8 +694,9 @@
         if (!r || !r.found) out.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find a booking with that number and first name. Check for typos, or DM @lopezcuts.dmv on Instagram.', onBooksy() ? ' Booked through Booksy? Your time is in the Booksy app.' : ''));
         else if (!list.length) out.replaceChildren(h('p', { class: 'muted' }, `Hi ${r.first_name}! You don't have an upcoming appointment right now.`), h('button', { class: 'btn gold block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book a cut'));
         else out.replaceChildren(h('p', {}, h('b', {}, `Hi ${r.first_name}! `), list.length > 1 ? `You have ${list.length} upcoming appointments.` : 'Here\'s your next appointment.'),
-          ...list.map(a => ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked'))),
-          h('p', { class: 'muted small' }, 'Miguel texts you the address the morning of. To cancel or change your time, use the link in your confirmation text or email, or DM @lopezcuts.dmv.'));
+          ...list.flatMap(a => [ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked')),
+            a.token ? h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => openManage(a.token) }, icon('cal'), 'Change or cancel this appointment') : null]),
+          h('p', { class: 'muted small' }, `Miguel texts you the address the morning of. You can change or cancel up to ${state.settings?.cancel_cutoff_hours ?? 6} hours before. Closer than that, reply to Miguel's text or DM @lopezcuts.dmv.`));
       } catch (err) { out.replaceChildren(h('div', { class: 'err' }, err.message || 'Something went wrong. Please try again.')); }
       go.disabled = false; goLabel.textContent = 'Find my appointment';
     });
