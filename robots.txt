@@ -1,4 +1,4 @@
 User-agent: *
-Disallow: /owner/
+Allow: /
 
 Sitemap: https://www.lopezcuts.com/sitemap.xml
