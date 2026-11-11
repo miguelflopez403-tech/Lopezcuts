@@ -15,7 +15,8 @@
 // booking is moved or cancelled). These only send once the secret EMAIL_FROM is set to an
 // address on a domain verified in Resend, e.g. "Lopez Cuts <bookings@lopezcuts.com>".
 // Reminder emails: the database calls this hourly with { cron: 'reminders' } when an appointment
-// is 12 to 24 hours away. The function asks the database which ones are due and claims them,
+// is 12 to 24 hours away. { cron: 'links' } works the same way for booking links clients ask for.
+// Reminder details: the database picks appointments The function asks the database which ones are due and claims them,
 // so a fake call can only send reminders that were due anyway, and never twice.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import webpush from 'npm:web-push@3.6.7';
@@ -58,6 +59,25 @@ Deno.serve(async (req) => {
       results.push(res);
     }
     return json({ kind: 'reminders', results });
+  }
+
+  // ---- "Email me my link" from the My appointment screen ----
+  if (payload?.cron === 'links') {
+    const { data: ids, error } = await sb.rpc('claim_link_requests');
+    if (error) return json({ error: 'Booking link emails are not set up yet. Run the email link SQL.' }, 500);
+    const { data: st } = await sb.from('settings').select('*').eq('id', 1).maybeSingle();
+    const results: string[] = [];
+    for (const cid of [...new Set((ids ?? []) as string[])].slice(0, 20)) {
+      try {
+        const { data: c } = await sb.from('clients').select('full_name, email').eq('id', cid).maybeSingle();
+        const { data: list } = await sb.from('appointments').select('*').eq('client_id', cid).in('status', ['booked', 'confirmed']).gt('ends_at', new Date().toISOString()).order('starts_at').limit(5);
+        for (const a of list ?? []) {
+          const { data: svc } = await sb.from('services').select('name').eq('id', a.service_id).maybeSingle();
+          results.push(await sendClientEmail('link', a, c, svc?.name ?? 'Haircut', st, ''));
+        }
+      } catch (e: any) { results.push('failed: ' + String(e?.message || e).slice(0, 160)); }
+    }
+    return json({ kind: 'links', results });
   }
 
   // ---- keys (made once, kept in the database) ----
@@ -214,7 +234,8 @@ async function sendClientEmail(kind: string, a: any, c: any, service: string, st
   const key = env('RESEND_API_KEY'); const from = env('EMAIL_FROM');
   if (!key) return 'no RESEND_API_KEY secret';
   if (!from || /resend\.dev/i.test(from)) return 'no EMAIL_FROM on your own domain yet';
-  const to = String(c?.email || '').trim();
+  // the email typed for this booking wins; the client record is the fallback for older and owner-made bookings
+  const to = String(a?.contact_email || c?.email || '').trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return 'client gave no email';
   const tz = st?.timezone || 'America/Denver';
   const day = new Date(a.starts_at).toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric' });
@@ -231,6 +252,7 @@ async function sendClientEmail(kind: string, a: any, c: any, service: string, st
     booked: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Here are your appointment details.', btn: 'View or change my booking', href: link },
     manual: { subject: `You're booked: ${day} at ${t(a.starts_at)}`, head: `You're booked, ${first}!`, lead: 'Miguel added this appointment for you. Here are the details.', btn: 'View or change my booking', href: link },
     moved: { subject: `New time: ${day} at ${t(a.starts_at)}`, head: 'Your appointment moved', lead: oldWhen ? `It was ${oldWhen}. Here is your new time.` : 'Here is your new time.', btn: 'View or change my booking', href: link },
+    link: { subject: `Your booking link: ${day} at ${t(a.starts_at)}`, head: 'Change or cancel your appointment', lead: `Hi ${first}, you asked for your booking link. Tap the button to change your time or cancel. If this wasn't you, you can ignore this email.`, btn: 'Change or cancel my booking', href: link },
     reminder: { subject: `Reminder: your cut is ${day} at ${t(a.starts_at)}`, head: `See you soon, ${first}!`, lead: 'A quick reminder about your appointment.', btn: 'View or change my booking', href: link },
     cancelled: { subject: `Cancelled: ${day} at ${t(a.starts_at)}`, head: 'Your appointment was cancelled', lead: byClient ? 'You cancelled this appointment. Book a new time whenever you\'re ready.' : `Sorry, Miguel had to cancel this appointment.${a.cancel_reason ? ' Note: ' + String(a.cancel_reason).slice(0, 200) : ''}`, btn: 'Book a new time', href: site + '/#book' },
   } as Record<string, Record<string, string>>)[kind];
