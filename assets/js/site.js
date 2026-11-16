@@ -239,7 +239,7 @@
     const withText = state.reviews.filter(r => (r.body || '').trim());
     const list = state.showAllReviews ? withText : withText.slice(0, 6);
     const more = $('#moreReviews');
-    if (more) { more.hidden = withText.length <= 6; more.textContent = state.showAllReviews ? 'Show fewer' : `See all ${withText.length} reviews`; more.onclick = () => { state.showAllReviews = !state.showAllReviews; renderReviews(); if (!state.showAllReviews) $('#reviews').scrollIntoView({ behavior: 'smooth' }); }; }
+    if (more) { more.hidden = withText.length <= 6; more.textContent = state.showAllReviews ? 'Show fewer' : 'Read more reviews'; more.onclick = () => { state.showAllReviews = !state.showAllReviews; renderReviews(); if (!state.showAllReviews) $('#reviews').scrollIntoView({ behavior: 'smooth' }); }; }
     $('#reviewList').replaceChildren(...list.map(r => h('article', { class: 'review', 'data-reveal': '' },
       h('span', { class: 'stars', 'aria-label': `${r.rating} out of 5 stars` }, '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating)),
       h('q', {}, r.body),
