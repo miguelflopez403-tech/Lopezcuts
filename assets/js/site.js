@@ -131,15 +131,17 @@
     const chips = h('div', { class: 'car-chips', role: 'tablist', 'aria-label': 'Portfolio categories' }, chipEls);
     const row = h('div', { class: 'car-row' });
     const track = h('div', { class: 'car-track glide', 'aria-label': 'Portfolio photos' }, row);
+    // Homepage strip uses a slightly wider crop of each repo photo (assets/img/portfolio/home/); falls back to the normal one.
+    const homeSrc = u => /^\/assets\/img\/portfolio\/[^/]+\.jpg$/.test(u || '') ? u.replace('/portfolio/', '/portfolio/home/') : u;
     const card = (b, p, k, clone) => h('button', { class: 'car-card', type: 'button', tabindex: clone ? '-1' : '0', 'aria-hidden': clone ? 'true' : null, style: clone ? '' : `--d:${Math.min(k, 5) * 60}ms`, 'aria-label': `${b.title}, photo ${k + 1} of ${b.photos.length}`,
       onclick: e => { if (moved > 6) { e.preventDefault(); return; } LB = { box: b, i: k }; lbShow(); lb.showModal(); } },
-      h('img', { src: p.image_url, alt: clone ? '' : `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: 'eager', decoding: 'async', draggable: 'false' }),
+      h('img', { src: homeSrc(p.image_url), alt: clone ? '' : `${b.title} by Lopez Cuts, barber in Salt Lake City`, loading: 'eager', decoding: 'async', draggable: 'false', onerror: e => { const im = e.target; if (im.src.includes('/portfolio/home/')) im.src = p.image_url; } }),
       h('span', { class: 'car-cap' }, h('b', {}, b.title), h('small', {}, `${k + 1}/${b.photos.length}`)));
     let lastP = -1;
     const place = () => { if (setW) { x = ((x % setW) + setW) % setW; } row.style.transform = `translate3d(${(-x).toFixed(2)}px,0,0)`;
       const c = chipEls[cur]; if (c && setW) { const pr = Math.round(Math.min(1, (loops * setW + x) / setW) * 200) / 200; if (pr !== lastP) { lastP = pr; c.style.setProperty('--p', pr); } } };
     // Decode the next category's photos before swapping so the switch never stutters or flashes.
-    const preload = b => Promise.race([Promise.all(b.photos.slice(0, 8).map(p => { const im = new Image(); im.decoding = 'async'; im.src = p.image_url; return (im.decode ? im.decode() : Promise.resolve()).catch(() => { }); })), new Promise(res => setTimeout(res, 900))]);
+    const preload = b => Promise.race([Promise.all(b.photos.slice(0, 8).map(p => { const im = new Image(); im.decoding = 'async'; im.src = homeSrc(p.image_url); return (im.decode ? im.decode() : Promise.resolve()).catch(() => { }); })), new Promise(res => setTimeout(res, 900))]);
     function build() {
       const b = real[cur]; const base = b.photos.map((p, k) => card(b, p, k, false));
       row.replaceChildren(...base);
