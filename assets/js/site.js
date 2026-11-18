@@ -246,13 +246,13 @@
       h('span', { class: 'stars', 'aria-label': `${r.rating} out of 5 stars` }, '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating)),
       h('q', {}, r.body),
       r.reply ? h('p', { class: 'reply' }, 'Miguel: ' + r.reply) : null,
-      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, [r.label, r.created_at ? T.date(r.created_at, { month: 'short', year: 'numeric' }) : '', r.source === 'booksy' ? 'via Booksy' : 'via Lopezcuts'].filter(Boolean).join(' · ')))))));
+      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, [r.label, r.created_at ? T.date(r.created_at, { month: 'short', year: 'numeric' }) : ''].filter(Boolean).join(' · ')))))));
     const s = state.settings; if (!s) return;
     const site = state.reviews.filter(r => r.source === 'site');
     const count = (+s.booksy_review_count || 0) + site.length;
     const avg = count ? (((+s.booksy_rating || 5) * (+s.booksy_review_count || 0)) + site.reduce((t, r) => t + r.rating, 0)) / count : 5;
     $('#ratingBadge .rating-n').textContent = avg.toFixed(1);
-    $('#ratingCount').textContent = site.length ? `${count} reviews (Booksy + Lopezcuts)` : `${count} reviews on Booksy`;
+    $('#ratingCount').textContent = `${count} reviews`;
     $('#heroRating').textContent = `${avg.toFixed(1)} · ${count} reviews`;
     const ha = $('#heroAvg'); if (ha) ha.textContent = avg.toFixed(1);
   }
@@ -279,16 +279,16 @@
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
   }
 
-  // ---------------- Booksy notice + fully booked ----------------
-  // Until Thanksgiving 2026, clients still book on Booksy. From Nov 27 (Salt Lake time) this goes away on its own.
-  const BOOKSY_UNTIL = '2026-11-27', BOOKSY_URL = 'https://lopezcuts140.booksy.com/k';
-  const onBooksy = () => T.today() < BOOKSY_UNTIL;
+  // ---------------- Top banner: news for clients + fully booked ----------------
+  // News shows from the day the site goes live through `until` (Salt Lake time), then hides on its own.
+  // To post new news, change the text and date here.
+  const NEWS = { until: '2026-12-30', bold: 'Home for the holidays:', text: 'Miguel is back in the DMV Dec\u00a023 to\u00a030.', link: 'Get a hometown cut', href: '#hometown' };
   const IG = 'https://instagram.com/lopezcuts.dmv';
   function showNotice() {
     const n = $('#siteNotice'); if (!n) return;
     const parts = [];
-    if (onBooksy()) parts.push(h('span', {}, h('b', {}, 'Booking through Booksy until Thanksgiving.'), ' ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')));
-    else if (state.full) parts.push(h('span', {}, h('b', {}, 'No open times right now.'), ' Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list.'));
+    if (NEWS && T.today() <= NEWS.until) parts.push(h('span', { class: 'news' }, h('b', {}, NEWS.bold), ' ', NEWS.text, ' ', h('a', { href: NEWS.href }, NEWS.link)));
+    if (state.full) parts.push(h('span', {}, h('b', {}, 'No open times right now.'), ' Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list.'));
     n.hidden = !parts.length; n.replaceChildren(...parts);
   }
   // When nothing is open, every booking button says Fully booked and can't be tapped.
@@ -316,8 +316,7 @@
     if (!staff || !cut) return;
     const noTimes = () => {
       setFull(true); window.LC_NEXT = { full: true }; dispatchEvent(new CustomEvent('lc:next', { detail: window.LC_NEXT }));
-      if (onBooksy()) { $('#nextWhen').textContent = 'Booking on Booksy'; $('#nextSub').replaceChildren('Until Thanksgiving. ', h('a', { href: BOOKSY_URL, target: '_blank', rel: 'noopener' }, 'Book on Booksy')); }
-      else { $('#nextWhen').textContent = 'No open times right now'; $('#nextSub').replaceChildren('Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list'); }
+      $('#nextWhen').textContent = 'No open times right now'; $('#nextSub').replaceChildren('Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list');
     };
     if (state.settings && !state.settings.booking_open) { noTimes(); return; }
     try {
@@ -769,7 +768,7 @@
       try {
         const r = await LC.rpc('find_appointment', { p_phone: ph.value, p_first_name: nm.value });
         const list = (r && r.appointments) || [];
-        if (!r || !r.found) out.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find a booking with that number and first name. Check for typos, or DM @lopezcuts.dmv on Instagram.', onBooksy() ? ' Booked through Booksy? Your time is in the Booksy app.' : ''));
+        if (!r || !r.found) out.replaceChildren(h('div', { class: 'err' }, 'We couldn\'t find a booking with that number and first name. Check for typos, or DM @lopezcuts.dmv on Instagram.'));
         else if (!list.length) out.replaceChildren(h('p', { class: 'muted' }, `Hi ${r.first_name}! You don't have an upcoming appointment right now.`), h('button', { class: 'btn gold block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book a cut'));
         else out.replaceChildren(h('p', {}, h('b', {}, `Hi ${r.first_name}! `), list.length > 1 ? `You have ${list.length} upcoming appointments.` : 'Here\'s your next appointment.'),
           ...list.flatMap(a => [ticket(a, h('span', { class: 'status-pill ' + a.status, style: 'justify-self:start;margin-top:6px' }, a.status === 'confirmed' ? 'Confirmed' : 'Booked')),

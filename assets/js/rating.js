@@ -1,6 +1,6 @@
 /* Live rating on pages without the full site script (About, U of U).
- * Same math as the homepage: Booksy count (Settings) + published reviews left on lopezcuts.com.
- * Fills elements like <span data-rating="count">35 reviews on Booksy</span>; the static text stays if anything fails. */
+ * Same math as the homepage: imported review count (Settings) + published reviews left on lopezcuts.com.
+ * Fills elements like <span data-rating="count">35 reviews</span>; the static text stays if anything fails. */
 (function () {
   'use strict';
   const els = [...document.querySelectorAll('[data-rating]')];
@@ -11,12 +11,12 @@
     const site = (reviews || []).filter(r => r.source === 'site');
     const count = bc + site.length;
     const avg = count ? (((+s.booksy_rating || 5) * bc) + site.reduce((t, r) => t + (+r.rating || 0), 0)) / count : 5;
-    const where = site.length ? 'reviews' : 'reviews on Booksy';
+    const where = 'reviews';
     els.forEach(el => {
       const k = el.dataset.rating;
       if (k === 'avg') el.textContent = avg.toFixed(1);
       else if (k === 'count') el.textContent = `${count} ${where}`;
-      else if (k === 'from') el.textContent = `${avg.toFixed(1)} from ${count}${site.length ? ' reviews' : ' on Booksy'}`;
+      else if (k === 'from') el.textContent = `${avg.toFixed(1)} from ${count} reviews`;
     });
   }).catch(() => { });
 })();
