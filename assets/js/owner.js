@@ -30,6 +30,7 @@
   const msgOf = a => String(a.client_message || '').replace(REF_RE, '').trim();
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 2800); }
   async function copy(text) { try { await navigator.clipboard.writeText(text); toast('Copied'); } catch { toast('Couldn\'t copy. Select the text and copy it.'); } }
+  const isPhone = () => matchMedia('(max-width: 860px)').matches;
   const field = (label, input, hint) => h('label', { class: 'f' }, label, input, hint ? h('span', { class: 'hint' }, hint) : null);
   const initials = n => (n || '?').replace(/\(sample\)/i, '').trim().split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase();
   const firstName = n => (n || '').replace(/\(sample\)/i, '').trim().split(' ')[0];
@@ -327,11 +328,24 @@
       h('button', { class: 'btn sm', type: 'button', onclick: async () => { await LC.auth.signOut(); entered = false; showDemoLogin(); } }, 'Switch role'),
       armBtn('Reset sample data', async () => { LC.reset(); await refresh(); toast('Sample data reset'); }, 'btn sm'));
   }
+  function openMore(rest, pending) {
+    modal('More', h('div', { class: 'more-list' }, rest.map(v => h('button', { type: 'button', class: 'more-item', 'aria-current': UI.view === v.id ? 'page' : null, onclick: () => { modalEl.close(); go(v.id); } },
+      icon(v.icon), h('span', {}, v.label), v.id === 'reviews' && pending ? h('span', { class: 'count' }, pending) : null, icon('right')))));
+  }
   function renderNav() {
     const pending = D.reviews.filter(r => r.status === 'pending').length;
     const mk = (v, cls) => h('button', { type: 'button', 'aria-current': UI.view === v.id ? 'page' : null, onclick: () => go(v.id) }, icon(v.icon), h('span', {}, v.label), v.id === 'reviews' && pending && cls === 'side' ? h('span', { class: 'count' }, pending) : null);
     $('#sideNav').replaceChildren(...allowed().map(v => mk(v, 'side')));
-    $('#tabbar').replaceChildren(...allowed().map(v => mk(v, 'tab')));
+    // Phone tab bar: the first 4 sections plus "More" (the rest no longer hide off the right edge).
+    const views = allowed(); const TAB_MAX = 5;
+    if (views.length <= TAB_MAX) $('#tabbar').replaceChildren(...views.map(v => mk(v, 'tab')));
+    else {
+      const main = views.slice(0, TAB_MAX - 1), rest = views.slice(TAB_MAX - 1);
+      const inMore = rest.some(v => v.id === UI.view);
+      $('#tabbar').replaceChildren(...main.map(v => mk(v, 'tab')),
+        h('button', { type: 'button', id: 'tabMore', 'aria-current': inMore ? 'page' : null, 'aria-haspopup': 'dialog', onclick: () => openMore(rest, pending) },
+          icon('menu'), h('span', {}, inMore ? (rest.find(v => v.id === UI.view) || {}).label : 'More'), pending && rest.some(v => v.id === 'reviews') ? h('span', { class: 'dot', 'aria-label': pending + ' reviews waiting' }) : null));
+    }
     $('#sideMe').replaceChildren(
       h('div', { class: 'me-row' }, h('span', { class: 'avatar' }, initials(ME.full_name || ME.email)), h('div', { style: 'min-width:0' }, h('div', { class: 'nm' }, ME.full_name || ME.email), h('div', { class: 'rl' }, ME.role))),
       h('button', { class: 'btn sm block', type: 'button', onclick: signOut }, icon('out'), 'Sign out'));
@@ -343,11 +357,12 @@
   function render() {
     const v = allowed().find(x => x.id === UI.view) || VIEWS[0];
     $('#viewTitle').textContent = v.label;
-    $('#newBooking').hidden = !['schedule', 'calendar'].includes(v.id); document.body.dataset.view = v.id;
+    $('#newBooking').hidden = $('#fabNew').hidden = !['schedule', 'calendar'].includes(v.id); document.body.dataset.view = v.id;
     try { $('#view').replaceChildren(...[v.render()].flat().filter(Boolean)); }
     catch (e) { console.error(e); $('#view').replaceChildren(h('div', { class: 'err' }, 'This page hit an error: ' + e.message)); }
   }
   $('#newBooking').addEventListener('click', () => openNewBooking());
+  $('#fabNew').addEventListener('click', () => openNewBooking());
   const gs = $('#globalSearch');
   gs.addEventListener('keydown', e => { if (e.key === 'Enter') { UI.clientQ = gs.value; go('clients'); } });
   gs.addEventListener('input', () => { if (UI.view === 'clients') { UI.clientQ = gs.value; render(); gs.focus(); } });
@@ -413,10 +428,15 @@
     });
     const greeting = (T.minutes(new Date()) < 720 ? 'Good morning' : T.minutes(new Date()) < 1020 ? 'Good afternoon' : 'Good evening') + ', ' + firstName(ME.full_name || 'there') + '.';
 
+    const chair = h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Today\'s chair'), h('div', { class: 'sub' }, greeting)), h('button', { class: 'btn sm', type: 'button', onclick: () => go('calendar') }, icon('cal'), 'Calendar')), tl);
+    // On a phone, who's next comes first and the numbers move to the bottom.
+    if (isPhone()) return [
+      h('div', { class: 'section-gap' }, nextUpCard(), chair, confirmationsCard(), textsCard(), headsUpCard()),
+      h('div', { class: 'kpis', style: 'margin-top:18px' }, kpis),
+    ];
     return [
       h('div', { class: 'kpis' }, kpis),
-      h('div', { class: 'grid2' },
-        h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Today\'s chair'), h('div', { class: 'sub' }, greeting)), h('button', { class: 'btn sm', type: 'button', onclick: () => go('calendar') }, icon('cal'), 'Calendar')), tl),
+      h('div', { class: 'grid2' }, chair,
         h('div', { class: 'section-gap' }, nextUpCard(), confirmationsCard(), textsCard(), headsUpCard())),
     ];
   }
@@ -472,20 +492,24 @@
     return h('section', { class: 'card' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, 'Confirmation texts'), h('div', { class: 'sub' }, 'Unconfirmed bookings for today and tomorrow. Each text has their one-tap confirm link.'))),
       h('div', { class: 'stack' }, body));
   }
-  // Thank-you texts after a visit: first-timers get rebook + review + refer-a-friend.
+  // Thank-you texts after a visit: one-tap rebook (their booking link shows their cut card),
+  // a light "3 to 4 weeks" nudge, review, and their own bring-a-friend link. Same text as sms_body() in the database.
+  const creditAmt = () => +(S().referral_credit ?? 0);
+  const friendLink = c => c?.ref_code ? `${(S().site_url || siteBase()).replace(/\/$/, '')}/?ref=${c.ref_code}` : '';
   function followupText(a) {
     const c = client(a.client_id); const site = (S().site_url || siteBase()).replace(/\/$/, '');
-    const visits = D.appointments.filter(x => x.client_id === a.client_id && x.status === 'completed').length;
+    const visits = (+c.prior_visits || 0) + D.appointments.filter(x => x.client_id === a.client_id && x.status === 'completed').length;
     const first = a.new_client || visits <= 1;
+    const fl = friendLink(c);
+    const friend = !fl ? `\nSend your friends my way: ${site}` : creditAmt() > 0 ? `\nBring a friend: ${fl} (you get ${money(creditAmt())} off when they come in)` : `\nBring a friend: ${fl}`;
     return first
       ? `Thanks for coming in, ${firstName(c.full_name)}! Hope you love the cut.`
-        + `\nReady for the next one? Book anytime: ${site}`
-        + `\nIf you have a minute, a quick review helps me a lot: ${manageUrl(a.manage_token)}`
-        + `\nKnow someone who needs a cut? Send them ${site} (first cuts are $25).`
-        + `\n- Miguel, Lopezcuts`
-      : `Thanks again, ${firstName(c.full_name)}! Book your next cut anytime: ${site}`
-        + `\nEnjoyed it? A quick review means a lot: ${manageUrl(a.manage_token)}`
-        + `\n- Miguel`;
+        + `\nYour cut and one-tap rebook: ${manageUrl(a.manage_token)}`
+        + `\nMost cuts look best rebooked in 3 to 4 weeks. A quick review on that link helps me a lot.`
+        + friend + `\n- Miguel`
+      : `Thanks again, ${firstName(c.full_name)}! Rebook the same cut in one tap: ${manageUrl(a.manage_token)}`
+        + `\nEnjoyed it? A quick review on that link means a lot.`
+        + friend + `\n- Miguel`;
   }
   // Texts waiting for Miguel to send from his own phone (Settings → Texts → "I send them").
   // Booking / you-moved-it / you-cancelled-it texts come from the database queue;
@@ -501,7 +525,9 @@
       .map(a => ({ key: 'f' + a.id, kind: 'followup', c: client(a.client_id), when: a.starts_at, msg: followupText(a), phone: client(a.client_id).phone, first: a.new_client, done: skip => markFollowup(a, skip) }));
     const list = [...queued.sort((x, y) => +new Date(x.when) - +new Date(y.when)), ...thanks.sort((x, y) => +new Date(y.when) - +new Date(x.when))].slice(0, 25);
     if (!list.length) return null;
-    const body = list.map(t => {
+    // phones: 3 at a time so Today isn't a wall of texts
+    const shown = isPhone() && !UI.allTexts ? list.slice(0, 3) : list;
+    const body = shown.map(t => {
       const sms = smsHref(t.phone, t.msg); const [label, tone] = kinds[t.kind] || [t.kind, ''];
       return h('div', { class: 'reminder' },
         h('div', { class: 'row between' }, h('b', {}, `${t.c.full_name} · ${T.date(t.when, { weekday: 'short', month: 'short', day: 'numeric' })}`),
@@ -514,7 +540,8 @@
     });
     return h('section', { class: 'card', id: 'textsCard' }, h('div', { class: 'card-h' }, h('div', {}, h('h2', {}, `Texts to send (${list.length})`),
       h('div', { class: 'sub' }, 'Send these from your phone at the end of the day. Tap Open in Messages, hit send, and it drops off this list.'))),
-      h('div', { class: 'stack' }, body));
+      h('div', { class: 'stack' }, body,
+        shown.length < list.length ? h('button', { class: 'btn sm block', type: 'button', onclick: () => { UI.allTexts = true; render(); } }, `Show all ${list.length}`) : null));
   }
   async function markText(m, skip) { await run(() => LC.update('sms_outbox', m.id, { status: skip ? 'skipped' : 'sent', sent_at: skip ? null : new Date().toISOString() }), skip ? 'Removed from the list' : null); refresh(['sms_outbox']); }
   async function markFollowup(a, notify) { await run(() => LC.update('appointments', a.id, { followup_sent_at: new Date().toISOString() }), notify ? 'Removed from the list' : null); refresh(['appointments']); }
@@ -555,6 +582,39 @@
     await run(() => LC.update('appointments', a.id, patch), { confirmed: 'Confirmed', no_show: 'Marked no-show', cancelled: 'Cancelled', booked: 'Restored' }[status]);
     await refresh(['appointments']); if (drawerEl.open && $('#drawerTitle').textContent === 'Appointment') openAppt(D.appointments.find(x => x.id === a.id) || a);
   }
+  // ---- bring a friend ----
+  // friends = clients they referred whose first cut is checked out; each one earns one credit.
+  function refStats(c) {
+    if (!c) return { friends: 0, used: 0, available: 0, credit: creditAmt(), list: [] };
+    const list = D.clients.filter(x => x.referred_by === c.id);
+    const friends = list.filter(x => D.appointments.some(a => a.client_id === x.id && a.status === 'completed')).length;
+    const used = +c.ref_credits_used || 0;
+    return { friends, used, available: Math.max(0, friends - used), credit: creditAmt(), list };
+  }
+  // ---- cut card (notes + photo the client sees on their booking link) ----
+  function cutCardFields(a, opts = {}) {
+    let photo = a.cut_photo_url || null;
+    const notes = h('textarea', { id: 'cutNotes' + (opts.id || ''), maxlength: '500', placeholder: 'e.g. #1 on the sides, low taper, 2 inches off the top, matte clay' }, a.cut_notes || '');
+    const img = h('img', { class: 'cut-thumb', alt: 'Photo of this cut', hidden: !photo, src: photo || '' });
+    const file = h('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: async e => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      try { toast('Uploading photo…'); photo = await LC.upload(f); img.src = photo; img.hidden = false; rm.hidden = false; toast('Photo added'); } catch (err) { toast(err.message || 'Upload failed'); }
+      e.target.value = '';
+    } });
+    const rm = h('button', { class: 'btn sm ghost', type: 'button', hidden: !photo, onclick: () => { photo = null; img.hidden = true; rm.hidden = true; } }, 'Remove photo');
+    const canPhoto = isAdmin();
+    const el = h('details', { class: 'cut-card-edit', open: !!opts.open || !!a.cut_notes || !!photo },
+      h('summary', {}, icon('image'), 'Cut card for the client', h('span', { class: 'small muted' }, ' · optional')),
+      h('p', { class: 'hint' }, 'They see this on their booking link with a one-tap "Book this again". Write it so they could show another barber.'),
+      field('What you did', notes),
+      h('div', { class: 'row' }, img, canPhoto ? h('button', { class: 'btn sm', type: 'button', onclick: () => file.click() }, icon('image'), photo ? 'Change photo' : 'Add a photo') : h('span', { class: 'hint' }, 'Only the owner or a manager can add photos.'), rm, file));
+    const save = async quiet => {
+      const patch = { cut_notes: notes.value.trim().slice(0, 500), cut_photo_url: photo };
+      if (patch.cut_notes === (a.cut_notes || '') && patch.cut_photo_url === (a.cut_photo_url || null)) return;
+      await run(() => LC.update('appointments', a.id, patch), quiet ? null : 'Cut card saved');
+    };
+    return { el, save };
+  }
   function openCheckout(a) {
     const c = client(a.client_id);
     const amt = h('input', { id: 'coAmt', type: 'number', min: '0', step: '0.01', inputmode: 'decimal', value: String(+a.price) });
@@ -567,15 +627,35 @@
     const upd = () => { total.textContent = money((+amt.value || 0) + (+tip.value || 0)); };
     amt.addEventListener('input', upd); tip.addEventListener('input', upd);
     const tipQuick = h('div', { class: 'chips' }, [0, 5, 10, 15].map(t => h('button', { class: 'chip', type: 'button', onclick: () => { tip.value = t || ''; upd(); } }, t ? '+' + money(t) : 'No tip')));
+    // Bring-a-friend credit: offered when a friend they sent has had their first cut.
+    const rs = refStats(c); let useCredit = false;
+    const creditBox = rs.available > 0 && rs.credit > 0 ? h('label', { class: 'toggle friend-credit' }, h('input', { type: 'checkbox', id: 'coCredit', onchange: e => {
+      useCredit = e.target.checked; amt.value = String(Math.max(0, (+amt.value || 0) + (useCredit ? -rs.credit : rs.credit))); upd();
+    } }), `Use friend credit: ${money(rs.credit)} off (${rs.available} available)`) : null;
+    // Cut card: what the client sees on their booking link next time ("Book this again").
+    // (only once the 2026-11-18 database update has added the columns)
+    const cut = 'cut_notes' in a ? cutCardFields(a) : { el: null, save: async () => { } };
     const btn = h('button', { class: 'btn gold block', type: 'button', onclick: async () => {
       btn.disabled = true;
-      try { await run(() => LC.rpc('complete_appointment', { p_id: a.id, p_amount: +amt.value || 0, p_tip: +tip.value || 0, p_method: method, p_note: note.value }), 'Checked out'); modalEl.close(); if (drawerEl.open) drawerEl.close(); await refresh(['appointments', 'payments', 'inventory']); }
+      try {
+        let extra = '';
+        if (useCredit) {
+          const off = await LC.rpc('use_ref_credit', { p_client: c.id });
+          if (+off > 0) extra = `Friend credit -${money(off)}`;
+          else { amt.value = String((+amt.value || 0) + rs.credit); upd(); toast('That friend credit was already used, so the full price is back.'); btn.disabled = false; useCredit = false; const cb = $('#coCredit'); if (cb) { cb.checked = false; cb.disabled = true; } return; }
+        }
+        await run(() => LC.rpc('complete_appointment', { p_id: a.id, p_amount: +amt.value || 0, p_tip: +tip.value || 0, p_method: method, p_note: [note.value.trim(), extra].filter(Boolean).join(' · ') }), 'Checked out');
+        try { await cut.save(true); } catch { /* the visit is checked out; the cut card can be added from the appointment */ }
+        modalEl.close(); if (drawerEl.open) drawerEl.close(); await refresh(['appointments', 'payments', 'inventory', 'clients']);
+      }
       catch { btn.disabled = false; }
     } }, icon('check'), 'Finish checkout');
     modal('Check out', [
       h('p', {}, h('b', {}, c.full_name), ' · ', svcName(a), h('br'), h('span', { class: 'muted small' }, `${T.date(a.starts_at)} at ${T.time(a.starts_at)}${a.new_client ? ' · first visit' : ''}`)),
       h('div', { class: 'row' }, field('Service total', amt), field('Tip', tip)), tipQuick,
+      creditBox,
       h('div', { class: 'f' }, 'Paid with', mrow), field('Note', note),
+      cut.el,
       h('div', { class: 'total-line' }, h('span', { class: 'muted' }, 'Total collected'), total),
       !isAdmin() ? h('p', { class: 'hint' }, 'Payments go straight to the owner\'s books. You won\'t see totals after checkout.') : null, btn]);
     setTimeout(() => tip.focus(), 60);
@@ -609,6 +689,12 @@
     const cancelBox = ['booked', 'confirmed'].includes(a.status) ? h('details', {}, h('summary', { class: 'btn sm danger', style: 'display:inline-flex' }, 'Cancel appointment'),
       h('div', { class: 'row', style: 'margin-top:10px;align-items:end' }, field('Reason', reason), h('button', { class: 'btn danger', type: 'button', onclick: () => setStatus(a, 'cancelled', { cancel_reason: reason.value }) }, 'Cancel it'))) : null;
 
+    // Cut card: saved at checkout, editable afterwards (the client's booking link shows the latest one).
+    let cutBox = null;
+    if (a.status === 'completed' && 'cut_notes' in a) {
+      const cut = cutCardFields(a, { id: 'Ap', open: true });
+      cutBox = h('div', { class: 'stack' }, cut.el, h('button', { class: 'btn sm', type: 'button', style: 'justify-self:start', onclick: async () => { await cut.save(false); await refresh(['appointments']); openAppt(a); } }, 'Save cut card'));
+    }
     drawer('Appointment', [
       h('div', { class: 'row between' }, h('div', {}, h('div', { style: 'font:400 2.4rem/1 var(--display)' }, T.time(a.starts_at)), h('div', { class: 'muted' }, `${T.date(a.starts_at, { weekday: 'long', month: 'long', day: 'numeric' })} · ${mins(a)} min`)), pill(a.status)),
       h('button', { class: 'picked', type: 'button', style: 'cursor:pointer;text-align:left', onclick: () => openClient(c.id) }, h('span', { class: 'avatar' }, initials(c.full_name)), h('span', { style: 'flex:1;min-width:0' }, h('b', {}, c.full_name), h('br'), h('span', { class: 'small muted' }, `${st ? st.visits : 0} visits${st?.noShows ? ' · ' + st.noShows + ' no-shows' : ''} · ${fmtPhone(c.phone) || 'no phone'}`)), icon('right')),
@@ -625,6 +711,7 @@
         msgOf(a) ? [h('dt', {}, 'Client wrote'), h('dd', {}, msgOf(a))] : null,
         refOf(a) ? [h('dt', {}, 'Reference photo'), h('dd', {}, h('a', { href: refOf(a), target: '_blank', rel: 'noopener' }, h('img', { class: 'ref-big', src: refOf(a), alt: 'Client reference photo' })))] : null),
       actions,
+      cutBox,
       h('div', { class: 'row' }, resched, cancelBox),
       field('Staff note', note), h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => { await run(() => LC.update('appointments', a.id, { internal_note: note.value }), 'Note saved'); refresh(['appointments']); } }, 'Save note'),
         h('button', { class: 'btn sm', type: 'button', onclick: () => openNewBooking({ clientId: c.id }) }, icon('plus'), 'Book again'),
@@ -918,7 +1005,7 @@
     const search = h('input', { class: 'inp', id: 'clSearch', type: 'search', placeholder: 'Search name, phone or email', value: UI.clientQ, style: 'max-width:320px', oninput: e => { UI.clientQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('#clSearch'); n.focus(); try { n.setSelectionRange(pos, pos); } catch { } } });
     const th = (k, l, cls) => h('th', { class: cls, style: sorts[k] ? 'cursor:pointer' : null, onclick: sorts[k] ? () => { UI.clientSort = k; render(); } : null }, l + (UI.clientSort === k ? ' ↓' : ''));
     return [
-      isAdmin() ? foundCard() : null,
+      isAdmin() && !isPhone() ? foundCard() : null,
       h('div', { class: 'row between', style: 'margin-bottom:12px' }, search,
         h('div', { class: 'row' }, isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: () => csv('lopezcuts-clients.csv', [['Name', 'Phone', 'Email', 'Visits', 'Last visit', 'No-shows', 'Spent', 'Tags', 'Notes'], ...list.map(r => [r.c.full_name, fmtPhone(r.c.phone), r.c.email, r.s.visits, r.s.last ? T.day(r.s.last) : '', r.s.noShows, r.s.spend, (r.c.tags || []).join(' '), r.c.notes])]) }, icon('down'), 'Export') : null,
           isAdmin() ? h('button', { class: 'btn', type: 'button', onclick: openImport }, icon('up'), 'Import from Booksy') : null,
@@ -935,6 +1022,8 @@
           isAdmin() ? h('td', { class: 'r num' }, money(s.spend)) : null,
           h('td', { class: 'num' }, s.next ? h('span', { class: 'pill confirmed plain' }, 'Booked') : s.dueBack ? (+new Date(s.dueBack) < now ? h('span', { class: 'pill warn plain' }, 'Overdue') : T.date(s.dueBack, { month: 'short', day: 'numeric' })) : h('span', { class: 'muted' }, '—'))))))) : h('div', { class: 'empty' }, q ? `No clients match "${UI.clientQ}".` : 'No clients here yet.'),
       list.length > 300 ? h('p', { class: 'hint', style: 'margin-top:8px' }, `Showing 300 of ${list.length}. Search to narrow it down.`) : null,
+      // phones: the client list comes first, the "how they found you" numbers after it
+      isAdmin() && isPhone() ? h('div', { style: 'margin-top:18px' }, foundCard()) : null,
     ];
   }
   function openClientForm(c) {
@@ -1032,6 +1121,17 @@
       h('p', { class: 'hint' }, 'Pick a CSV file of your clients. On Booksy, export your client list from the Clients section of Booksy Biz on a computer. The file needs a Name column; Phone, Email, number of visits, last visit, birthday and notes are picked up too. Clients already here (same phone) are updated, not doubled.'),
       h('label', { class: 'btn upload' }, icon('up'), 'Choose file', file), out], { wide: true });
   }
+  function friendBox(c) {
+    const rs = refStats(c); const by = c.referred_by && D.client.get(c.referred_by); const link = friendLink(c);
+    if (!link && !by) return null;
+    const msg = `Hey ${firstName(c.full_name)}! Here's your Lopez Cuts friend link: ${link}` + (rs.credit > 0 ? `\nWhen a friend books their first cut with it, you get ${money(rs.credit)} off your next one.` : `\nFirst cuts are $25 for anyone you send.`);
+    return h('div', { class: 'friend-box' },
+      h('div', { class: 'row between' }, h('b', {}, 'Bring a friend'), rs.available > 0 && rs.credit > 0 ? h('span', { class: 'pill gold plain' }, `${money(rs.available * rs.credit)} credit`) : null),
+      by ? h('p', { class: 'small' }, 'Sent by ', h('button', { class: 'link-btn', type: 'button', onclick: () => openClient(by.id) }, by.full_name)) : null,
+      link ? h('p', { class: 'small muted' }, `${rs.friends} friend${rs.friends === 1 ? '' : 's'} brought in` + (rs.list.length > rs.friends ? ` · ${rs.list.length - rs.friends} booked, first cut not done yet` : '') + (rs.used ? ` · ${rs.used} credit${rs.used === 1 ? '' : 's'} used` : '')) : null,
+      link ? h('div', { class: 'row' }, h('code', { class: 'small' }, link.replace(/^https?:\/\//, '')), h('button', { class: 'btn sm', type: 'button', onclick: () => copy(link) }, icon('copy'), 'Copy'),
+        smsHref(c.phone, msg) ? h('a', { class: 'btn sm', href: smsHref(c.phone, msg) }, icon('msg'), 'Text it') : null) : null);
+  }
   function openClient(id) {
     const c = D.client.get(id); if (!c) return; const s = D.stats.get(id); const now = Date.now();
     const notes = D.client_notes.filter(n => n.client_id === id);
@@ -1047,6 +1147,7 @@
       h('div', { class: 'row' }, sms ? h('a', { class: 'btn sm', href: sms }, icon('msg'), 'Text') : null, c.phone ? h('button', { class: 'btn sm', type: 'button', onclick: () => copy(fmtPhone(c.phone)) }, icon('copy'), fmtPhone(c.phone)) : null, c.email ? h('a', { class: 'btn sm', href: 'mailto:' + c.email }, c.email) : null,
         h('button', { class: 'btn sm gold', type: 'button', onclick: () => { drawerEl.close(); openNewBooking({ clientId: id }); } }, icon('plus'), 'Book'),
         h('button', { class: 'btn sm', type: 'button', onclick: () => openClientForm(c) }, 'Edit')),
+      friendBox(c),
       c.birthday ? h('p', { class: 'small muted' }, '🎂 Birthday ' + T.dayLabel(c.birthday, { month: 'long', day: 'numeric' })) : null,
       field('Standing notes', std, 'Shows on every appointment card'),
       h('button', { class: 'btn sm', type: 'button', style: 'justify-self:start', onclick: async () => { await run(() => LC.update('clients', id, { notes: std.value }), 'Saved'); refresh(['clients']); } }, 'Save notes'),
@@ -1411,6 +1512,7 @@
     const save = async () => {
       const patch = { business_name: v.business_name.value.trim(), phone: v.phone.value.trim(), address: v.address.value.trim(), instagram: v.instagram.value.trim().replace(/^@/, ''), timezone: tz.value, booking_open: open.checked, avoid_gaps: gaps.checked };
       ['slot_interval_min', 'buffer_min', 'booking_window_days', 'max_active_bookings', 'cancel_cutoff_hours', 'booksy_review_count'].forEach(k => { patch[k] = parseInt(v[k].value, 10) || 0; });
+      if ('referral_credit' in s) patch.referral_credit = Math.max(0, Math.min(100, Math.round(+v.referral_credit.value || 0)));
       patch.min_notice_min = Math.round((+v.min_notice_hours.value || 0) * 60); patch.booksy_rating = +v.booksy_rating.value || 5; patch.updated_at = new Date().toISOString();
       await run(() => LC.update('settings', 1, patch), 'Settings saved'); refresh(['settings']);
     };
@@ -1429,6 +1531,7 @@
         h('div', { class: 'row' }, field('Start times every', inp('slot_interval_min', { type: 'number', min: '5', max: '120', step: '5' }), 'minutes'), field('Gap between clients', inp('buffer_min', { type: 'number', min: '0', max: '60', step: '5' }), 'minutes')),
         h('div', { class: 'row' }, field('Book at least', v.min_notice_hours, 'hours in advance'), field('Book up to', inp('booking_window_days', { type: 'number', min: '1', max: '180' }), 'days in the future (90 = 3 months)')),
         h('div', { class: 'row' }, field('Max upcoming per client', inp('max_active_bookings', { type: 'number', min: '1', max: '10' })), field('Cancel / reschedule', inp('cancel_cutoff_hours', { type: 'number', min: '0', max: '72' }), 'up to this many hours before')),
+        'referral_credit' in s ? field('Bring-a-friend credit', inp('referral_credit', { type: 'number', min: '0', max: '100', step: '1' }), 'Optional reward: dollars off for a client each time a friend they sent finishes a first cut. Leave at 0 for no reward (links still track who sent who).') : null,
         h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save settings'),
         h('div', { class: 'alert info' }, icon('copy'), h('span', {}, 'Your booking link: ', h('b', {}, siteBase())), h('button', { class: 'btn sm', type: 'button', onclick: () => copy(siteBase()) }, 'Copy'))));
   }
@@ -1556,5 +1659,6 @@
       await gate();
     } catch (e) { showLogin(e.message); }
   })();
+  matchMedia('(max-width: 860px)').addEventListener('change', () => { if (entered && ['today', 'clients'].includes(UI.view)) render(); });
   addEventListener('resize', () => { if (entered && UI.view === 'calendar') { clearTimeout(window.__rz); window.__rz = setTimeout(render, 200); } });
 })();
