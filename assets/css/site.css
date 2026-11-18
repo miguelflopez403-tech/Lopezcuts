@@ -635,7 +635,7 @@ h2.split.go .w > span { transform: none; }
 .fit-row:hover .fit-go, .fit-row:focus-visible .fit-go { background: var(--gold); border-color: var(--gold); color: #17130a; transform: rotate(-45deg); }
 @media (max-width: 760px) { .fit-list { grid-template-columns: 1fr; } .fit-row { padding: 13px 2px; gap: 10px; } .fit-go { width: 30px; height: 30px; } }
 
-/* ---------- Top notice (Booksy / no open times) ---------- */
+/* ---------- Top notice (no open times) ---------- */
 .notice { background: var(--gold-sheen); color: #120e05; text-align: center; font-size: .92rem; line-height: 1.4; padding: 9px 16px; }
 .notice b { font-weight: 700; }
 .notice a { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; margin-left: 4px; white-space: nowrap; }
