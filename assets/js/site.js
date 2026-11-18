@@ -246,13 +246,13 @@
       h('span', { class: 'stars', 'aria-label': `${r.rating} out of 5 stars` }, '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating)),
       h('q', {}, r.body),
       r.reply ? h('p', { class: 'reply' }, 'Miguel: ' + r.reply) : null,
-      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, [r.label, r.created_at ? T.date(r.created_at, { month: 'short', year: 'numeric' }) : '', r.source === 'booksy' ? 'via Booksy' : 'via Lopezcuts'].filter(Boolean).join(' · ')))))));
+      h('div', { class: 'who' }, h('span', { class: 'av', 'aria-hidden': 'true' }, (r.display_name || 'C')[0]), h('span', {}, h('b', {}, r.display_name), h('br'), h('span', { class: 'src' }, [r.label, r.created_at ? T.date(r.created_at, { month: 'short', year: 'numeric' }) : ''].filter(Boolean).join(' · ')))))));
     const s = state.settings; if (!s) return;
     const site = state.reviews.filter(r => r.source === 'site');
     const count = (+s.booksy_review_count || 0) + site.length;
     const avg = count ? (((+s.booksy_rating || 5) * (+s.booksy_review_count || 0)) + site.reduce((t, r) => t + r.rating, 0)) / count : 5;
     $('#ratingBadge .rating-n').textContent = avg.toFixed(1);
-    $('#ratingCount').textContent = site.length ? `${count} reviews (Booksy + Lopezcuts)` : `${count} reviews on Booksy`;
+    $('#ratingCount').textContent = `${count} reviews`;
     $('#heroRating').textContent = `${avg.toFixed(1)} · ${count} reviews`;
     const ha = $('#heroAvg'); if (ha) ha.textContent = avg.toFixed(1);
   }
@@ -279,11 +279,15 @@
     if (adds.length) $('.addon-list').replaceChildren(...adds.map(a => h('li', {}, h('span', {}, a.name), h('b', {}, '+' + money(a.price)))));
   }
 
-  // ---------------- Fully booked notice ----------------
+  // ---------------- Top banner: news for clients + fully booked ----------------
+  // News shows from the day the site goes live through `until` (Salt Lake time), then hides on its own.
+  // To post new news, change the text and date here.
+  const NEWS = { until: '2026-12-30', bold: 'Home for the holidays:', text: 'Miguel is back in the DMV Dec\u00a023 to\u00a030.', link: 'Get a hometown cut', href: '#hometown' };
   const IG = 'https://instagram.com/lopezcuts.dmv';
   function showNotice() {
     const n = $('#siteNotice'); if (!n) return;
     const parts = [];
+    if (NEWS && T.today() <= NEWS.until) parts.push(h('span', { class: 'news' }, h('b', {}, NEWS.bold), ' ', NEWS.text, ' ', h('a', { href: NEWS.href }, NEWS.link)));
     if (state.full) parts.push(h('span', {}, h('b', {}, 'No open times right now.'), ' Text Miguel or ', h('a', { href: IG, target: '_blank', rel: 'noopener' }, 'DM @lopezcuts.dmv'), ' to get on the list.'));
     n.hidden = !parts.length; n.replaceChildren(...parts);
   }
