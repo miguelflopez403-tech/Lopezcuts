@@ -494,7 +494,7 @@
   }
   // Thank-you texts after a visit: one-tap rebook (their booking link shows their cut card),
   // a light "3 to 4 weeks" nudge, review, and their own bring-a-friend link. Same text as sms_body() in the database.
-  const creditAmt = () => +(S().referral_credit ?? 5);
+  const creditAmt = () => +(S().referral_credit ?? 0);
   const friendLink = c => c?.ref_code ? `${(S().site_url || siteBase()).replace(/\/$/, '')}/?ref=${c.ref_code}` : '';
   function followupText(a) {
     const c = client(a.client_id); const site = (S().site_url || siteBase()).replace(/\/$/, '');
@@ -629,7 +629,7 @@
     const tipQuick = h('div', { class: 'chips' }, [0, 5, 10, 15].map(t => h('button', { class: 'chip', type: 'button', onclick: () => { tip.value = t || ''; upd(); } }, t ? '+' + money(t) : 'No tip')));
     // Bring-a-friend credit: offered when a friend they sent has had their first cut.
     const rs = refStats(c); let useCredit = false;
-    const creditBox = rs.available > 0 ? h('label', { class: 'toggle friend-credit' }, h('input', { type: 'checkbox', id: 'coCredit', onchange: e => {
+    const creditBox = rs.available > 0 && rs.credit > 0 ? h('label', { class: 'toggle friend-credit' }, h('input', { type: 'checkbox', id: 'coCredit', onchange: e => {
       useCredit = e.target.checked; amt.value = String(Math.max(0, (+amt.value || 0) + (useCredit ? -rs.credit : rs.credit))); upd();
     } }), `Use friend credit: ${money(rs.credit)} off (${rs.available} available)`) : null;
     // Cut card: what the client sees on their booking link next time ("Book this again").
@@ -1124,9 +1124,9 @@
   function friendBox(c) {
     const rs = refStats(c); const by = c.referred_by && D.client.get(c.referred_by); const link = friendLink(c);
     if (!link && !by) return null;
-    const msg = `Hey ${firstName(c.full_name)}! Here's your Lopez Cuts friend link: ${link}\nWhen a friend books their first cut with it, you get ${money(rs.credit)} off your next one.`;
+    const msg = `Hey ${firstName(c.full_name)}! Here's your Lopez Cuts friend link: ${link}` + (rs.credit > 0 ? `\nWhen a friend books their first cut with it, you get ${money(rs.credit)} off your next one.` : `\nFirst cuts are $25 for anyone you send.`);
     return h('div', { class: 'friend-box' },
-      h('div', { class: 'row between' }, h('b', {}, 'Bring a friend'), rs.available > 0 ? h('span', { class: 'pill gold plain' }, `${money(rs.available * rs.credit)} credit`) : null),
+      h('div', { class: 'row between' }, h('b', {}, 'Bring a friend'), rs.available > 0 && rs.credit > 0 ? h('span', { class: 'pill gold plain' }, `${money(rs.available * rs.credit)} credit`) : null),
       by ? h('p', { class: 'small' }, 'Sent by ', h('button', { class: 'link-btn', type: 'button', onclick: () => openClient(by.id) }, by.full_name)) : null,
       link ? h('p', { class: 'small muted' }, `${rs.friends} friend${rs.friends === 1 ? '' : 's'} brought in` + (rs.list.length > rs.friends ? ` · ${rs.list.length - rs.friends} booked, first cut not done yet` : '') + (rs.used ? ` · ${rs.used} credit${rs.used === 1 ? '' : 's'} used` : '')) : null,
       link ? h('div', { class: 'row' }, h('code', { class: 'small' }, link.replace(/^https?:\/\//, '')), h('button', { class: 'btn sm', type: 'button', onclick: () => copy(link) }, icon('copy'), 'Copy'),
@@ -1531,7 +1531,7 @@
         h('div', { class: 'row' }, field('Start times every', inp('slot_interval_min', { type: 'number', min: '5', max: '120', step: '5' }), 'minutes'), field('Gap between clients', inp('buffer_min', { type: 'number', min: '0', max: '60', step: '5' }), 'minutes')),
         h('div', { class: 'row' }, field('Book at least', v.min_notice_hours, 'hours in advance'), field('Book up to', inp('booking_window_days', { type: 'number', min: '1', max: '180' }), 'days in the future (90 = 3 months)')),
         h('div', { class: 'row' }, field('Max upcoming per client', inp('max_active_bookings', { type: 'number', min: '1', max: '10' })), field('Cancel / reschedule', inp('cancel_cutoff_hours', { type: 'number', min: '0', max: '72' }), 'up to this many hours before')),
-        'referral_credit' in s ? field('Bring-a-friend credit', inp('referral_credit', { type: 'number', min: '0', max: '100', step: '1' }), 'dollars off for the client each time a friend they sent finishes a first cut. 0 turns the reward off (links still track who sent who).') : null,
+        'referral_credit' in s ? field('Bring-a-friend credit', inp('referral_credit', { type: 'number', min: '0', max: '100', step: '1' }), 'Optional reward: dollars off for a client each time a friend they sent finishes a first cut. Leave at 0 for no reward (links still track who sent who).') : null,
         h('button', { class: 'btn gold', type: 'button', onclick: save }, 'Save settings'),
         h('div', { class: 'alert info' }, icon('copy'), h('span', {}, 'Your booking link: ', h('b', {}, siteBase())), h('button', { class: 'btn sm', type: 'button', onclick: () => copy(siteBase()) }, 'Copy'))));
   }

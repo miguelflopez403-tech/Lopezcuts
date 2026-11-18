@@ -277,11 +277,11 @@
     function refStats(c) {
       const friends = db.clients.filter(x => x.referred_by === c.id && db.appointments.some(a => a.client_id === x.id && a.status === 'completed')).length;
       const used = +c.ref_credits_used || 0;
-      return { friends, used, available: Math.max(0, friends - used), credit: +(S().referral_credit ?? 5) };
+      return { friends, used, available: Math.max(0, friends - used), credit: +(S().referral_credit ?? 0) };
     }
     function upgrade() {
       let changed = ensureCodes() > 0;
-      const st = db.settings[0]; if (st && st.referral_credit == null) { st.referral_credit = 5; changed = true; }
+      const st = db.settings[0]; if (st && st.referral_credit == null) { st.referral_credit = 0; changed = true; }
       // a sample cut card so the preview shows one
       if (!db.appointments.some(a => 'cut_notes' in a)) {
         const done = db.appointments.filter(a => a.status === 'completed').sort((x, y) => +new Date(y.starts_at) - +new Date(x.starts_at));

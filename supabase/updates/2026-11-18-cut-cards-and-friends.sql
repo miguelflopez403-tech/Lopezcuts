@@ -7,8 +7,9 @@
 --
 -- Bring a friend: every client gets a short code. A friend who books their first cut
 -- from lopezcuts.com/?ref=CODE is linked to them. Once that friend's first cut is
--- checked out, the client earns a credit (Settings: referral_credit, $5 to start),
--- which the dashboard offers at their next checkout.
+-- checked out, the client can earn a credit (Settings: referral_credit),
+-- which the dashboard offers at their next checkout. The credit starts at $0 (off):
+-- links only track who sent who until a reward is set in Settings.
 
 -- ---------- cut cards ----------
 alter table public.appointments add column if not exists cut_notes text not null default '';
@@ -31,7 +32,7 @@ alter table public.clients add constraint clients_not_own_referrer check (referr
 create unique index if not exists clients_ref_code_key on public.clients (ref_code);
 create index if not exists clients_referred_by_idx on public.clients (referred_by);
 
-alter table public.settings add column if not exists referral_credit numeric(10,2) not null default 5;
+alter table public.settings add column if not exists referral_credit numeric(10,2) not null default 0;
 alter table public.settings drop constraint if exists settings_referral_credit_check;
 alter table public.settings add constraint settings_referral_credit_check check (referral_credit between 0 and 100);
 

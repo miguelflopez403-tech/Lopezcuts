@@ -530,7 +530,7 @@
       refField(),
       h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '300', placeholder: 'Style you want, how short on the sides, first time, etc.', oninput: bind('note') }, f.note)),
       // Only asked on the First Time Haircut (most clients are regulars).
-      friendCode() && svc().first_visit_only ? h('div', { class: 'friend-note' }, '🤝 A friend sent you. Your first cut with Miguel is $25, and your friend gets a thank-you after it.') : null,
+      friendCode() && svc().first_visit_only ? h('div', { class: 'friend-note' }, '🤝 A friend sent you. Your first cut with Miguel is $25.') : null,
       svc().first_visit_only ? h('div', { class: 'field' }, h('label', { for: 'bFound' }, 'How did you find Miguel? (optional)'), h('select', { id: 'bFound', onchange: bind('found') }, h('option', { value: '' }, 'Pick one'), FOUND.map(([v, l]) => h('option', { value: v, selected: f.found === v }, l)))) : null,
       short ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember me on this device so booking is faster next time'),
       h('div', { class: 'summary' },
@@ -619,7 +619,7 @@
     return h('div', { class: 'friend-card' },
       h('p', { class: 'opt-label' }, 'Bring a friend'),
       h('p', {}, credit > 0 ? `Send a friend your link. Their first cut is $25, and when they come in you get ${money(credit)} off your next cut.` : 'Send a friend your link. Their first cut is $25.'),
-      f.available > 0 ? h('p', { class: 'friend-earned' }, `🎉 You have ${money(f.available * credit)} off waiting. Miguel takes it off at checkout.`) : f.friends > 0 ? h('p', { class: 'muted small' }, `${f.friends} friend${f.friends === 1 ? '' : 's'} came in from your link. Thank you!`) : null,
+      f.available > 0 && credit > 0 ? h('p', { class: 'friend-earned' }, `🎉 You have ${money(f.available * credit)} off waiting. Miguel takes it off at checkout.`) : f.friends > 0 ? h('p', { class: 'muted small' }, `${f.friends} friend${f.friends === 1 ? '' : 's'} came in from your link. Thank you!`) : null,
       h('div', { class: 'linkbox' }, h('code', {}, link.replace(/^https?:\/\//, '')), h('button', { class: 'btn sm ghost-dark', type: 'button', onclick: () => copy(link) }, icon('copy'), 'Copy')),
       h('button', { class: 'btn ghost-dark block', type: 'button', onclick: share }, icon('msg'), 'Send it to a friend'));
   }
