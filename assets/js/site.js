@@ -354,6 +354,21 @@
     if (SRC_ALIAS[raw]) sessionStorage.setItem('lopezcuts-src', SRC_ALIAS[raw]);
     B.form.found = sessionStorage.getItem('lopezcuts-src') || '';
   } catch { B.form.found = ''; }
+  // Bring a friend: lopezcuts.com/?ref=CODE (from a client's booking link or thank-you text).
+  // The code is kept on this device for 60 days and linked to the booking right after it goes through.
+  const FRIEND_KEY = 'lopezcuts-friend';
+  const friendCode = () => { try { const f = JSON.parse(localStorage.getItem(FRIEND_KEY) || 'null'); return f && /^[A-Z0-9]{6}$/.test(f.code) && Date.now() - f.at < 60 * 864e5 ? f.code : ''; } catch { return ''; } };
+  let friendArrived = false;
+  try {
+    const code = String(new URLSearchParams(location.search).get('ref') || '').trim().toUpperCase();
+    if (/^[A-Z0-9]{6}$/.test(code)) {
+      friendArrived = true;
+      localStorage.setItem(FRIEND_KEY, JSON.stringify({ code, at: Date.now() }));
+      try { sessionStorage.setItem('lopezcuts-src', 'friend'); } catch { }
+      if (!B.form.found) B.form.found = 'friend';
+    }
+  } catch { }
+  if (friendArrived) setTimeout(() => toast('A friend sent you! Your first cut with Miguel is $25.'), 900);
   const STEPS = ['Choose your service', 'Pick a time', 'Your details', 'You\'re booked'];
   const svc = () => state.services.find(s => s.id === B.serviceId);
   const addonList = () => state.services.filter(s => s.is_addon && s.active && s.bookable);
@@ -381,6 +396,9 @@
     B.serviceId = B.serviceId || (pick || mains[0])?.id;
     B.staffId = B.staffId || state.staff[0]?.id;
     B.error = ''; B.result = null; B.step = 0; B.picking = false; B.ref = readRef() || B.ref;
+    if (opts.addons) B.addons = new Set(opts.addons.filter(id => addonList().some(a => a.id === id)));
+    if (opts.note != null) B.form.note = opts.note;
+    if (opts.ref) B.ref = opts.ref;
     if (opts.day && opts.slot) { B.day = opts.day; B.slot = opts.slot; }
     sheet.showModal(); render();
     if (opts.day && opts.slot) go(1);
@@ -512,6 +530,7 @@
       refField(),
       h('div', { class: 'field' }, h('label', { for: 'bNote' }, 'Anything Miguel should know? (optional)'), h('textarea', { id: 'bNote', maxlength: '300', placeholder: 'Style you want, how short on the sides, first time, etc.', oninput: bind('note') }, f.note)),
       // Only asked on the First Time Haircut (most clients are regulars).
+      friendCode() && svc().first_visit_only ? h('div', { class: 'friend-note' }, '🤝 A friend sent you. Your first cut with Miguel is $25, and your friend gets a thank-you after it.') : null,
       svc().first_visit_only ? h('div', { class: 'field' }, h('label', { for: 'bFound' }, 'How did you find Miguel? (optional)'), h('select', { id: 'bFound', onchange: bind('found') }, h('option', { value: '' }, 'Pick one'), FOUND.map(([v, l]) => h('option', { value: v, selected: f.found === v }, l)))) : null,
       short ? null : h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'bRemember', checked: f.remember, onchange: bind('remember') }), 'Remember me on this device so booking is faster next time'),
       h('div', { class: 'summary' },
@@ -535,6 +554,8 @@
         const r = await LC.rpc('book_appointment', { p_name: f.name.trim(), p_phone: f.phone, p_email: f.email.trim() || null, p_service_id: B.serviceId, p_addon_ids: [...B.addons], p_staff_id: B.staffId, p_starts_at: B.slot, p_note: (f.note.trim().slice(0, 300) + (B.ref ? `\nReference photo: ${B.ref.url}` : '')).trim().slice(0, 500) });
         try { if (f.remember) localStorage.setItem('lopezcuts-me', JSON.stringify({ name: f.name, phone: f.phone, email: f.email, remember: true })); else localStorage.removeItem('lopezcuts-me'); } catch { }
         if (f.found && svc().first_visit_only && r?.token) LC.rpc('set_heard_from', { p_token: r.token, p_heard_from: f.found }).catch(() => { });
+        const fc = friendCode();
+        if (fc && r?.token) LC.rpc('set_referral', { p_token: r.token, p_code: fc }).catch(() => { }).finally(() => { try { localStorage.removeItem(FRIEND_KEY); } catch { } });
         B.known = !!f.remember && knownClient(); B.editMe = false;
         rememberBooking(r); B.result = r; B.form.note = ''; saveRef(null); B.busy = false; go(3); nextOpening();
       } catch (e) {
@@ -568,6 +589,41 @@
         h('button', { class: 'btn ghost-dark', type: 'button', onclick: () => sheet.close() }, 'Done')));
   }
 
+  // ---------------- Cut card + bring a friend (on the client's booking link) ----------------
+  function bookSame(cut) {
+    const mains = state.services.filter(x => !x.is_addon && x.bookable && x.active);
+    const same = mains.find(x => x.id === cut.service_id && !x.first_visit_only);
+    const svcId = (same || mains.find(x => !x.first_visit_only && !/hometown/i.test(x.name)) || mains[0])?.id;
+    const when = T.date(cut.date, { month: 'short', day: 'numeric' });
+    sheet.close();
+    openBooking({ serviceId: svcId, addons: cut.addon_ids || [], note: `Same as my last cut (${when}).`, ref: cut.photo ? { url: absUrl(cut.photo), cat: 'My last cut' } : null });
+  }
+  function cutCard(cut) {
+    return h('div', { class: 'cut-card' },
+      h('p', { class: 'opt-label' }, 'Your last cut'),
+      h('div', { class: 'cut-row' },
+        cut.photo ? h('img', { src: cut.photo, alt: 'Your last cut', loading: 'lazy' }) : null,
+        h('div', {}, h('b', {}, `${cut.service || 'Haircut'} · ${T.date(cut.date, { month: 'short', day: 'numeric' })}`),
+          cut.notes ? h('p', { class: 'cut-notes' }, cut.notes) : h('p', { class: 'muted small' }, 'Miguel saved a photo of this cut.'))),
+      h('button', { class: 'btn gold block', type: 'button', onclick: () => bookSame(cut) }, icon('cal'), 'Book this again'),
+      h('p', { class: 'muted small' }, 'Most cuts look best rebooked in 3 to 4 weeks.'));
+  }
+  function friendCard(bk) {
+    const link = `${location.origin}/?ref=${bk.ref_code}`;
+    const f = bk.friends || {}; const credit = +f.credit || 0;
+    const shareText = `I get my hair cut by Miguel at Lopez Cuts. First cuts are $25. Book here:`;
+    const share = async () => {
+      if (navigator.share) { try { await navigator.share({ title: 'Lopez Cuts', text: shareText, url: link }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      copy(`${shareText} ${link}`);
+    };
+    return h('div', { class: 'friend-card' },
+      h('p', { class: 'opt-label' }, 'Bring a friend'),
+      h('p', {}, credit > 0 ? `Send a friend your link. Their first cut is $25, and when they come in you get ${money(credit)} off your next cut.` : 'Send a friend your link. Their first cut is $25.'),
+      f.available > 0 ? h('p', { class: 'friend-earned' }, `🎉 You have ${money(f.available * credit)} off waiting. Miguel takes it off at checkout.`) : f.friends > 0 ? h('p', { class: 'muted small' }, `${f.friends} friend${f.friends === 1 ? '' : 's'} came in from your link. Thank you!`) : null,
+      h('div', { class: 'linkbox' }, h('code', {}, link.replace(/^https?:\/\//, '')), h('button', { class: 'btn sm ghost-dark', type: 'button', onclick: () => copy(link) }, icon('copy'), 'Copy')),
+      h('button', { class: 'btn ghost-dark block', type: 'button', onclick: share }, icon('msg'), 'Send it to a friend'));
+  }
+
   // ---------------- Manage a booking (#manage-<token>) ----------------
   async function openManage(token) {
     B.step = 9; sheet.showModal(); render(); header('Your booking', 'Manage', 100); $('#sheetFoot').hidden = true; backBtn.hidden = true;
@@ -583,6 +639,8 @@
       h('div', { class: 'big-ticket' }, h('span', { class: 'price' }, money(bk.price)), h('span', { class: 'when' }, T.date(bk.starts_at, { weekday: 'long', month: 'short', day: 'numeric' })), h('span', { style: 'font:400 1.6rem/1 var(--display)' }, `${T.time(bk.starts_at)} – ${T.time(bk.ends_at)}`), h('span', { class: 'what' }, `${bk.service}${bk.addons?.length ? ' + ' + bk.addons.join(' + ') : ''} · ${bk.staff}`)),
       h('p', {}, h('span', { class: 'status-pill ' + bk.status }, label), '  ', h('span', { class: 'muted' }, `Hi ${bk.first_name}. ` + ({ cancelled: 'This appointment is cancelled. Nothing else to do.', completed: 'Thanks for coming in!', no_show: 'We missed you at this one.' }[bk.status] || 'You\'re all set.'))),
     ];
+    // Their latest cut, with one-tap rebook. Shown first on a finished visit, after the booking actions otherwise.
+    if (bk.cut && bk.status === 'completed') view.push(cutCard(bk.cut));
     const msg = h('div', { role: 'status' });
     const act = async (fn, okMsg) => { try { await fn(); toast(okMsg); openManage(token); } catch (e) { msg.replaceChildren(h('div', { class: 'err' }, e.message)); } };
     if (bk.can_confirm) view.push(h('button', { class: 'btn gold block', type: 'button', onclick: () => act(() => LC.rpc('confirm_booking', { p_token: token }), 'Confirmed. See you then!') }, icon('check'), 'Confirm I\'ll be there'));
@@ -604,7 +662,9 @@
         h('button', { class: 'btn gold block', type: 'button', onclick: () => act(() => LC.rpc('submit_review', { p_token: token, p_rating: rating, p_body: text.value, p_display_name: nm.value }), 'Thanks! Your review will show up once Miguel approves it.') }, 'Post review'));
     }
     if (bk.reviewed) view.push(h('p', { class: 'muted' }, 'Thanks for your review!'));
-    view.push(msg, h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book another cut'));
+    if (bk.cut && bk.status !== 'completed') view.push(cutCard(bk.cut));
+    if (bk.ref_code && bk.status !== 'cancelled') view.push(friendCard(bk));
+    view.push(msg, bk.cut ? null : h('button', { class: 'btn ghost-dark block', type: 'button', onclick: () => { sheet.close(); openBooking(); } }, icon('cal'), 'Book another cut'));
     body.replaceChildren(h('div', { class: 'step-anim' }, view));
   }
   // Move a booking to another open time (same cutoff as cancelling).

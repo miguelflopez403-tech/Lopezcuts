@@ -270,9 +270,31 @@
       return d;
     }
 
+    // Bring-a-friend codes + cut cards (mirrors supabase/updates/2026-11-18-cut-cards-and-friends.sql).
+    const REF_ABC = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    function newRefCode() { let v; do { v = Array.from({ length: 6 }, () => REF_ABC[Math.floor(Math.random() * REF_ABC.length)]).join(''); } while (db.clients.some(c => c.ref_code === v)); return v; }
+    function ensureCodes() { let n = 0; db.clients.forEach(c => { if (!c.ref_code) { c.ref_code = newRefCode(); n++; } if (c.ref_credits_used == null) c.ref_credits_used = 0; }); return n; }
+    function refStats(c) {
+      const friends = db.clients.filter(x => x.referred_by === c.id && db.appointments.some(a => a.client_id === x.id && a.status === 'completed')).length;
+      const used = +c.ref_credits_used || 0;
+      return { friends, used, available: Math.max(0, friends - used), credit: +(S().referral_credit ?? 5) };
+    }
+    function upgrade() {
+      let changed = ensureCodes() > 0;
+      const st = db.settings[0]; if (st && st.referral_credit == null) { st.referral_credit = 5; changed = true; }
+      // a sample cut card so the preview shows one
+      if (!db.appointments.some(a => 'cut_notes' in a)) {
+        const done = db.appointments.filter(a => a.status === 'completed').sort((x, y) => +new Date(y.starts_at) - +new Date(x.starts_at));
+        done.slice(0, 3).forEach((a, i) => { a.cut_notes = ['Low taper, #1 on the sides, 2 inches off the top, scissor-blended. Matte clay.', 'Burst fade, skin at the bottom, kept the length on top.', 'Mid taper with a lineup. #2 on top.'][i]; a.cut_photo_url = ['/assets/img/portfolio/super-clean-taper-fade.jpg', '/assets/img/portfolio/seby-burst-fade.jpg', null][i]; });
+        db.appointments.forEach(a => { if (!('cut_notes' in a)) a.cut_notes = ''; });
+        changed = true;
+      }
+      if (changed) store.save();
+    }
     function init() {
       db = store.load();
       if (!db || !db.settings) { db = seed(); store.save(); }
+      upgrade();
     }
     init();
     window.addEventListener('storage', e => { if (e.key === KEY) { db = store.load() || db; emit('*'); } });
@@ -357,7 +379,10 @@
         can_cancel: ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now() + s.cancel_cutoff_hours * 36e5,
         can_reschedule: ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now() + s.cancel_cutoff_hours * 36e5,
         can_confirm: a.status === 'booked' && new Date(a.starts_at) > Date.now(),
-        can_review: a.status === 'completed' && !reviewed, reviewed };
+        can_review: a.status === 'completed' && !reviewed, reviewed,
+        cut: (() => { const x = db.appointments.filter(y => y.client_id === a.client_id && y.status === 'completed' && (y.cut_notes || y.cut_photo_url)).sort((p, q) => +new Date(q.starts_at) - +new Date(p.starts_at))[0];
+          return x ? { date: x.starts_at, service: (db.services.find(v => v.id === x.service_id) || {}).name, service_id: x.service_id, addon_ids: x.addon_ids || [], notes: x.cut_notes || '', photo: x.cut_photo_url || null } : null; })(),
+        ref_code: c.ref_code || null, friends: c.id ? refStats(c) : null };
     }
     const fail = m => { throw new ApiError(m); };
     const isStaff = () => signedIn();
@@ -380,7 +405,7 @@
         const startIso = new Date(p_starts_at).toISOString();
         if (!slots(p_staff_id, T.day(startIso, s.timezone), dur, false).includes(startIso)) fail('Sorry, that time was just taken. Please pick another one.');
         let c = db.clients.find(x => x.phone === phone);
-        if (!c) { c = { id: uuid(), full_name: name, phone, email, birthday: null, notes: '', tags: [], marketing_opt_in: false, blocked: false, source: 'online', created_by: null, created_at: new Date().toISOString() }; db.clients.push(c); }
+        if (!c) { c = { id: uuid(), full_name: name, phone, email, birthday: null, notes: '', tags: [], marketing_opt_in: false, blocked: false, source: 'online', created_by: null, created_at: new Date().toISOString() }; c.ref_code = newRefCode(); c.ref_credits_used = 0; db.clients.push(c); }
         else { if (c.blocked) fail(`Online booking isn't available for this number. Please DM @lopezcuts.dmv on Instagram to book.`); if (email && !c.email) c.email = email; }
         const active = db.appointments.filter(a => a.client_id === c.id && ['booked', 'confirmed'].includes(a.status) && new Date(a.starts_at) > Date.now()).length;
         if (active >= s.max_active_bookings) fail(`You already have ${active} upcoming bookings. DM @lopezcuts.dmv on Instagram if you need another.`);
@@ -396,6 +421,18 @@
         const a = db.appointments.find(x => x.manage_token === p_token); const c = a && db.clients.find(x => x.id === a.client_id);
         if (!c || !ok.includes(p_heard_from) || c.heard_from) return { ok: false };
         c.heard_from = p_heard_from; c.heard_from_at = new Date().toISOString(); commit('clients'); return { ok: true };
+      },
+      set_referral({ p_token, p_code }) {
+        const ref = db.clients.find(x => x.ref_code && x.ref_code === String(p_code || '').trim().toUpperCase());
+        const a = db.appointments.find(x => x.manage_token === p_token && +new Date(x.created_at) > Date.now() - 36e5); const c = a && db.clients.find(x => x.id === a.client_id);
+        if (!ref || !c || c.id === ref.id || c.referred_by || c.prior_visits > 0 || ref.referred_by === c.id || db.appointments.some(x => x.client_id === c.id && x.status === 'completed')) return { ok: false };
+        c.referred_by = ref.id; c.referred_at = new Date().toISOString(); if (!c.heard_from) { c.heard_from = 'friend'; c.heard_from_at = c.referred_at; } commit('clients'); return { ok: true };
+      },
+      use_ref_credit({ p_client }) {
+        if (!isStaff()) fail('Not allowed.');
+        const c = db.clients.find(x => x.id === p_client); if (!c) return 0;
+        const st = refStats(c); if (st.available < 1) return 0;
+        c.ref_credits_used = (+c.ref_credits_used || 0) + 1; commit('clients'); return st.credit;
       },
       find_appointment({ p_phone, p_first_name }) {
         const phone = normPhone(p_phone); if (!phone) fail('Please enter the mobile number you booked with.');
@@ -458,7 +495,7 @@
         const svc = db.services.find(x => x.id === p_service_id); if (!svc) fail('Please choose a service.');
         const ad = addonInfo(p_addon_ids); const dur = svc.duration_min + ad.dur; const src = p_source || 'manual';
         let cid = p_client_id; const phone = normPhone(p_phone);
-        if (!cid) { const ex = phone && db.clients.find(x => x.phone === phone); if (ex) cid = ex.id; else { if (!String(p_name || '').trim()) fail('Please enter the client\'s name.'); const c = { id: uuid(), full_name: String(p_name).trim(), phone, email: (p_email || '').trim().toLowerCase() || null, birthday: null, notes: '', tags: [], marketing_opt_in: false, blocked: false, source: src, created_by: me().id, created_at: new Date().toISOString() }; db.clients.push(c); cid = c.id; } }
+        if (!cid) { const ex = phone && db.clients.find(x => x.phone === phone); if (ex) cid = ex.id; else { if (!String(p_name || '').trim()) fail('Please enter the client\'s name.'); const c = { id: uuid(), full_name: String(p_name).trim(), phone, email: (p_email || '').trim().toLowerCase() || null, birthday: null, notes: '', tags: [], marketing_opt_in: false, blocked: false, source: src, created_by: me().id, created_at: new Date().toISOString() }; c.ref_code = newRefCode(); c.ref_credits_used = 0; db.clients.push(c); cid = c.id; } }
         const startIso = new Date(p_starts_at).toISOString(); const endIso = new Date(+new Date(startIso) + dur * 6e4).toISOString();
         if (!(p_force && isAdmin()) && src !== 'walk_in' && !slots(p_staff_id, T.day(startIso), dur, true).includes(startIso)) fail('That time is outside working hours or already taken.');
         if (db.appointments.some(a => a.staff_id === p_staff_id && ['booked', 'confirmed'].includes(a.status) && overlaps(+new Date(a.starts_at), +new Date(a.ends_at), +new Date(startIso), +new Date(endIso)))) fail('That overlaps another booking.');
@@ -501,7 +538,7 @@
         if (!bulk) await tick(); guard(table, 'insert');
         const k = keyOf(table); const r = { ...row }; if (k === 'id' && !r.id) r.id = uuid();
         if ('created_at' in r || ['clients', 'expenses', 'client_notes', 'time_off', 'portfolio_items', 'staff_invites', 'reviews'].includes(table)) r.created_at = r.created_at || new Date().toISOString();
-        if (table === 'clients') { if (r.phone && db.clients.some(c => c.phone === r.phone)) throw new ApiError('A client with that phone number already exists.'); r.created_by = me().id; r.tags = r.tags || []; r.notes = r.notes || ''; }
+        if (table === 'clients') { if (r.phone && db.clients.some(c => c.phone === r.phone)) throw new ApiError('A client with that phone number already exists.'); r.created_by = me().id; r.tags = r.tags || []; r.notes = r.notes || ''; r.ref_code = r.ref_code || newRefCode(); r.ref_credits_used = 0; }
         if (table === 'client_notes') r.author_id = me().id;
         if (table === 'expenses') r.created_by = me().id;
         (db[table] = db[table] || []).push(r); audit(table, 'insert', r); commit(table); return clone(r);
@@ -533,7 +570,7 @@
       },
       async upload(file) { return resizeImage(file, 900, 'dataurl'); },
       realtime() { /* other tabs update through the storage event */ },
-      reset() { db = seed(); store.save(); emit('*'); },
+      reset() { db = seed(); store.save(); upgrade(); emit('*'); },
       auth: {
         async session() { return signedIn() ? { demo: true } : null; },
         onChange() {},

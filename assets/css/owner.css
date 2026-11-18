@@ -438,3 +438,42 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
 .note.ref-note { display: flex; align-items: center; gap: 8px; }
 .note.ref-note img { width: 34px; height: 42px; object-fit: cover; border-radius: 6px; flex: none; }
 img.ref-big { width: 160px; max-width: 100%; aspect-ratio: 4 / 5; object-fit: cover; border-radius: 12px; display: block; border: 1px solid var(--line); }
+
+/* ---------- Phone "More" tab, cut cards, bring a friend (2026-11-18) ---------- */
+@media (max-width: 860px) {
+  .tabbar { overflow-x: visible; }
+  .tabbar button { position: relative; flex: 1 1 0; min-width: 0; }
+  .tabbar .dot { position: absolute; top: 5px; right: calc(50% - 16px); width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+}
+.more-list { display: grid; gap: 8px; }
+.more-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); font: 600 1rem/1.2 var(--body); cursor: pointer; text-align: left; }
+.more-item > span:first-of-type { flex: 1; }
+.more-item[aria-current="page"] { border-color: var(--gold); }
+.more-item .count { background: var(--gold); color: #120e05; border-radius: 999px; padding: 2px 8px; font-size: .78rem; }
+.more-item .ic { width: 20px; height: 20px; }
+.cut-card-edit { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 10px; }
+.cut-card-edit[open] { padding-bottom: 14px; }
+.cut-card-edit summary { cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; list-style: none; }
+.cut-card-edit summary::-webkit-details-marker { display: none; }
+.cut-card-edit summary .ic { width: 18px; height: 18px; }
+.cut-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.friend-credit { padding: 10px 12px; border: 1px dashed var(--gold); border-radius: 12px; }
+.friend-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.friend-box p { margin: 0; }
+.friend-box code { padding: 6px 8px; background: var(--surface-2); border-radius: 8px; overflow-wrap: anywhere; }
+.link-btn { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
+/* New booking on phones: a floating button just above the tab bar (thumb reach), not in the top bar */
+.fab { display: none; }
+@media (max-width: 860px) {
+  .top .btn#newBooking { display: none !important; }
+  .fab:not([hidden]) { display: inline-flex; position: fixed; z-index: 31; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(80px + env(safe-area-inset-bottom, 0px)); padding: 13px 18px; border-radius: 999px; font-size: .95rem; gap: 8px; box-shadow: 0 10px 24px -6px rgb(0 0 0 / 55%); }
+  .fab .ic { width: 18px; height: 18px; }
+  body[data-view="schedule"] .view, body[data-view="calendar"] .view { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+}
+/* Phones: status + price on one line in appointment cards (shorter cards, less scrolling) */
+@media (max-width: 560px) {
+  .appt { gap: 10px 12px; padding: 12px; }
+  .appt .right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .appt .price { font-size: 1.25rem; }
+  .appt .acts { margin-top: 4px; }
+}
