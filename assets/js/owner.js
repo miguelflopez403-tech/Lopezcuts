@@ -798,7 +798,10 @@
     const sIds = new Set(staffShown.map(s => s.id));
     const hours = D.working_hours.filter(w => sIds.has(w.staff_id));
     const appts = D.appointments.filter(a => days.includes(T.day(a.starts_at)) && a.status !== 'cancelled' && (sIds.has(a.staff_id) || !isAdmin()));
-    let lo = Math.min(9 * 60, ...hours.map(w => toMin(w.start_time)), ...appts.map(a => T.minutes(a.starts_at)));
+    // Start the grid an hour before the earliest open hour or booking (9 AM if there are none),
+    // so the day opens near the first appointments instead of early morning.
+    const starts = [...hours.map(w => toMin(w.start_time)), ...appts.map(a => T.minutes(a.starts_at))];
+    let lo = starts.length ? Math.max(0, Math.min(...starts) - 60) : 9 * 60;
     let hi = Math.max(20 * 60, ...hours.map(w => toMin(w.end_time)), ...appts.map(a => T.minutes(a.starts_at) + mins(a)));
     lo = Math.floor(lo / 60) * 60; hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60);
     const ppm = 1.15, H = (hi - lo) * ppm;
@@ -844,12 +847,16 @@
 
     return [
       h('div', { class: 'cal-bar' },
-        h('h2', {}, label),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Previous', onclick: () => shift(-1) }, icon('left')),
-        h('button', { class: 'btn sm', type: 'button', onclick: () => { UI.calAnchor = T.today(); render(); } }, 'Today'),
-        h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Next', onclick: () => shift(1) }, icon('right')),
-        isAdmin() && D.staff.filter(s => s.active).length > 1 ? h('div', { class: 'chips' }, [['all', 'Everyone'], ...D.staff.filter(s => s.active).map(s => [s.id, firstName(s.display_name)])].map(([id, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(UI.calStaff === id), onclick: () => { UI.calStaff = id; render(); } }, l))) : null,
-        h('button', { class: 'btn sm', type: 'button', onclick: () => openTimeOff() }, icon('clock'), 'Block time')),
+        // Date + arrows stay together; on phones this row pins to the top while scrolling.
+        h('div', { class: 'cal-nav' },
+          h('h2', {}, label),
+          h('div', { class: 'cal-arrows' },
+            h('button', { class: 'icon-btn', type: 'button', 'aria-label': one ? 'Previous day' : 'Previous week', onclick: () => shift(-1) }, icon('left')),
+            h('button', { class: 'btn sm', type: 'button', onclick: () => { UI.calAnchor = T.today(); render(); } }, 'Today'),
+            h('button', { class: 'icon-btn', type: 'button', 'aria-label': one ? 'Next day' : 'Next week', onclick: () => shift(1) }, icon('right')))),
+        h('div', { class: 'cal-tools' },
+          isAdmin() && D.staff.filter(s => s.active).length > 1 ? h('div', { class: 'chips' }, [['all', 'Everyone'], ...D.staff.filter(s => s.active).map(s => [s.id, firstName(s.display_name)])].map(([id, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(UI.calStaff === id), onclick: () => { UI.calStaff = id; render(); } }, l))) : null,
+          h('button', { class: 'btn sm', type: 'button', onclick: () => openTimeOff() }, icon('clock'), 'Block time'))),
       h('div', { class: 'cal' }, h('div', { class: 'cal-scroll' }, grid)),
       h('div', { class: 'legend' }, h('span', {}, h('i', { style: 'background:var(--open);border:1px solid var(--line)' }), 'Open hours'), h('span', {}, h('i', { style: 'background:var(--closed)' }), 'Closed'), h('span', {}, h('i', { style: 'background:var(--info-soft)' }), 'Booked'), h('span', {}, h('i', { style: 'background:var(--good-soft)' }), 'Confirmed'), h('span', {}, h('i', { style: 'background:var(--bad-soft)' }), 'No-show'), h('span', {}, 'Click an open spot to book')),
     ];
