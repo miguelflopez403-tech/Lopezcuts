@@ -160,7 +160,7 @@ button { font: inherit; color: inherit; }
   .top h1 { font-size: 1.7rem; }
   .top-date { display: none; }
   .search { display: none; }
-  .btn#newBooking span { display: none; }
+  .btn#newBooking { padding: 7px 11px; font-size: .84rem; gap: 6px; }
   .view { padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(90px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
   .banner { margin: 12px 16px 0; }
   .tabbar { display: flex; position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; background: var(--side); padding: 6px max(6px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px)); overflow-x: auto; scrollbar-width: none; }
@@ -232,7 +232,10 @@ button { font: inherit; color: inherit; }
 
 /* Calendar */
 .cal-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.cal-bar h2 { font-size: 1.7rem; margin-right: auto; }
+.cal-nav { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; }
+.cal-nav h2 { font-size: 1.7rem; margin-right: auto; min-width: 0; }
+.cal-arrows { display: flex; align-items: center; gap: 6px; flex: none; }
+.cal-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cal { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
 .cal-scroll { overflow-x: auto; }
 .cal-grid { display: grid; min-width: 720px; }
@@ -419,11 +422,16 @@ dialog::backdrop { background: rgb(8 7 6 / 55%); backdrop-filter: blur(3px); }
 .sched-open:hover { color: var(--gold-text); background: var(--surface-2); }
 @media (max-width: 560px) { .sched-row { grid-template-columns: 64px minmax(0, 1fr) auto; padding: 12px; gap: 10px; } .sched-sum .btn { margin-left: 0; } }
 
-/* New booking button lives on Schedule and Calendar only; on phones the top bar
-   only stays pinned there, so it doesn't cover other pages. */
+/* New booking button lives on Schedule and Calendar only. On phones the top bar
+   scrolls away with the page (it used to stay pinned and covered the day/week
+   controls), and the calendar's date + arrows row pins instead. */
 #newBooking[hidden] { display: none !important; }
 @media (max-width: 860px) {
-  body:not([data-view="schedule"]):not([data-view="calendar"]) .top { position: static; }
+  .top { position: static; }
+  .cal-bar { display: contents; }
+  .cal-tools { margin: 8px 0 14px; }
+  .cal-nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 15; margin: 0 -16px; padding: 8px 16px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  .cal-nav h2 { font-size: 1.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 /* Client reference photo on appointments */
