@@ -798,7 +798,10 @@
     const sIds = new Set(staffShown.map(s => s.id));
     const hours = D.working_hours.filter(w => sIds.has(w.staff_id));
     const appts = D.appointments.filter(a => days.includes(T.day(a.starts_at)) && a.status !== 'cancelled' && (sIds.has(a.staff_id) || !isAdmin()));
-    let lo = Math.min(9 * 60, ...hours.map(w => toMin(w.start_time)), ...appts.map(a => T.minutes(a.starts_at)));
+    // Start the grid an hour before the earliest open hour or booking (9 AM if there are none),
+    // so the day opens near the first appointments instead of early morning.
+    const starts = [...hours.map(w => toMin(w.start_time)), ...appts.map(a => T.minutes(a.starts_at))];
+    let lo = starts.length ? Math.max(0, Math.min(...starts) - 60) : 9 * 60;
     let hi = Math.max(20 * 60, ...hours.map(w => toMin(w.end_time)), ...appts.map(a => T.minutes(a.starts_at) + mins(a)));
     lo = Math.floor(lo / 60) * 60; hi = Math.min(24 * 60, Math.ceil(hi / 60) * 60);
     const ppm = 1.15, H = (hi - lo) * ppm;
