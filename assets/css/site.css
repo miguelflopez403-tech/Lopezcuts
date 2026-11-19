@@ -716,3 +716,14 @@ html.intro-on { overflow: hidden; }
 .notice > span { display: block; }
 .notice > span + span { margin-top: 4px; }
 #hometown { scroll-margin-top: 96px; }
+
+/* Illuminated gold titles: soft glow + slow light sweep on the gold words of big headings */
+:root { --title-glow: rgb(176 131 47 / 16%); --title-shine: rgb(255 246 214 / 45%); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --title-glow: rgb(215 178 99 / 42%); --title-shine: rgb(255 248 222 / 70%); } }
+:root[data-theme="dark"] { --title-glow: rgb(215 178 99 / 42%); --title-shine: rgb(255 248 222 / 70%); }
+:is(h1, h2) span.gold:not(.line) { background-image: linear-gradient(105deg, transparent 40%, var(--title-shine) 50%, transparent 60%), var(--gold-foil); background-size: 300% 100%, 100% 100%; background-repeat: no-repeat; filter: drop-shadow(0 0 14px var(--title-glow)); animation: title-shine 8s ease-in-out infinite; }
+.band:not(.ink):not(.gold-band) h2 span.gold { background-image: linear-gradient(105deg, transparent 40%, var(--title-shine) 50%, transparent 60%), var(--gold-foil-deep); }
+.gold-band :is(h1, h2) span.gold { filter: none; animation: none; }
+.hero-title .gold { filter: drop-shadow(0 0 18px var(--title-glow)); }
+@keyframes title-shine { 0%, 55% { background-position: 120% 0, 0 0; } 100% { background-position: -20% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { :is(h1, h2) span.gold { animation: none; } }
