@@ -229,13 +229,10 @@
   @media (max-width: 520px) { .specs { grid-template-columns: 1fr; } .pro-photos img:last-child { margin-top: 24px; } }
   /* Take a seat: illuminated gold heading */
   .seat { position: relative; overflow: hidden; isolation: isolate; }
-  .seat::before { content: ""; position: absolute; z-index: -1; left: -10%; top: -20%; width: 70%; height: 90%; background: radial-gradient(closest-side, rgb(215 178 99 / 16%), transparent 70%); pointer-events: none; animation: seat-glow 7s ease-in-out infinite; }
   .seat .story2 > div:first-child { position: sticky; top: 110px; }
-  .seat .kicker { font: 400 clamp(1.5rem, 2.6vw, 2.1rem)/1 var(--display); letter-spacing: .14em; margin-bottom: 14px; background: var(--gold-foil-deep); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 10px rgb(215 178 99 / 30%)); }
+  .seat .kicker { font: 400 clamp(1.5rem, 2.6vw, 2.1rem)/1 var(--display); letter-spacing: .14em; margin-bottom: 14px; background: var(--gold-foil-deep); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .seat .pull { border-left-color: transparent; border-image: linear-gradient(180deg, #f4e3a8, #b0832f) 1; }
-  @keyframes seat-glow { 0%, 100% { opacity: .75; transform: translateY(0); } 50% { opacity: 1; transform: translateY(12px); } }
   @media (max-width: 860px) { .seat .story2 > div:first-child { position: static; } }
-  @media (prefers-reduced-motion: reduce) { .seat::before { animation: none; } }
 </style>
 </head>
 <body>
