@@ -241,6 +241,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://www.lopezcuts.com/products</loc>
+    <lastmod>2026-11-19</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://www.lopezcuts.com/miguel-lopez</loc>
     <lastmod>2026-11-10</lastmod>
     <changefreq>monthly</changefreq>
