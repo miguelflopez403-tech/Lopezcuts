@@ -856,6 +856,22 @@
       h('div', {}, h('b', {}, String(weekList.filter(a => a.status !== 'no_show').length)), h('span', {}, 'clients next 7 days')),
       isAdmin() ? h('div', {}, h('b', {}, money(est(weekList))), h('span', {}, 'estimated next 7 days')) : null,
       h('button', { class: 'btn sm', type: 'button', onclick: () => { UI.schedPast = !UI.schedPast; render(); } }, UI.schedPast ? 'Hide past days' : 'Show past 2 weeks'));
+    // Open times per day (what he can still offer). Same rules clients see when booking
+    // (hours minus bookings, blocks, avoid-gaps); today and tomorrow use the staff rules
+    // so last-minute times inside the 12 h online notice still show.
+    const oStaff = isAdmin() ? (D.staff.find(s => s.id === ME.staff_id && s.active) || D.staff.find(s => s.active)) : D.staff.find(s => s.id === ME.staff_id);
+    const oDur = (D.services.find(s => !s.is_addon && s.active && s.bookable) || {}).duration_min || 40;
+    const tomorrow = T.addDays(today, 1);
+    const openBox = (d) => {
+      const box = h('div', { class: 'sd-open', 'aria-live': 'polite' }, h('span', { class: 'sd-open-l' }, 'Open'), h('span', { class: 'sd-open-wait' }, 'checking…'));
+      openTimes(oStaff, d, oDur, d <= tomorrow).then(list => {
+        if (list === null) { box.remove(); return; }
+        box.replaceChildren(h('span', { class: 'sd-open-l' }, 'Open'),
+          list.length ? h('span', { class: 'sd-open-times' }, list.map(t => h('button', { class: 'sd-slot', type: 'button', 'aria-label': 'Book ' + T.time(t), onclick: () => openNewBooking({ day: d, staffId: oStaff.id, time: T.hm(T.minutes(t)) }) }, shortTime(t))))
+            : h('span', { class: 'sd-open-wait' }, d === today ? 'none left today' : 'fully booked'));
+      });
+      return box;
+    };
     const dayEl = ({ d, list, working }) => {
       const isToday = d === today;
       const label = isToday ? 'Today' : d === T.addDays(today, 1) ? 'Tomorrow' : T.dayLabel(d, { weekday: 'long' });
@@ -863,18 +879,37 @@
       return h('section', { class: 'sched-day' + (isToday ? ' today' : '') + (d < today ? ' past' : ''), id: 'day-' + d },
         h('div', { class: 'sched-h' },
           h('div', {}, h('div', { class: 'sd-name' }, label), h('div', { class: 'sd-date' }, T.dayLabel(d, { month: 'long', day: 'numeric' }))),
-          h('div', { class: 'sd-tot' }, h('span', {}, live.length ? `${live.length} client${live.length === 1 ? '' : 's'}` : 'No bookings'), isAdmin() ? h('b', {}, money(est(live))) : null, isAdmin() ? h('small', {}, d < today ? 'income' : 'est. income') : null)),
+          h('div', { class: 'sd-tot' }, h('span', {}, live.length ? `${live.length} client${live.length === 1 ? '' : 's'}` : 'No bookings'), isAdmin() ? h('b', {}, money(est(live))) : null, isAdmin() ? h('small', {}, d < today ? 'income' : 'est. income') : null),
+          working && d >= today && oStaff ? openBox(d) : null),
         list.length ? h('div', { class: 'sched-list' }, list.map(a => {
           const c = client(a.client_id); const end = +new Date(a.ends_at); const isNow = +new Date(a.starts_at) <= now && end > now;
           return h('button', { class: 'sched-row' + (end < now ? ' done' : '') + (isNow ? ' now' : ''), type: 'button', onclick: () => openAppt(a) },
             h('span', { class: 'sr-time' }, T.time(a.starts_at)),
             h('span', { class: 'sr-main' }, h('b', {}, c.full_name), h('span', {}, svcName(a) + (a.new_client ? ' · first visit' : ''))),
             h('span', { class: 'sr-right' }, isAdmin() ? h('b', {}, money(a.price)) : null, a.status !== 'booked' ? pill(a.status) : null));
-        })) : h('button', { class: 'sched-open', type: 'button', onclick: () => openNewBooking({ day: d }) }, working ? 'Open · tap to add a booking' : 'Tap to add a booking'));
+        })) : h('button', { class: 'sched-open', type: 'button', onclick: () => openNewBooking({ day: d }) }, working && !oStaff ? 'Open · tap to add a booking' : 'Tap to add a booking'));
     };
     const out = [head, h('div', { class: 'sched' }, days.map(dayEl))];
     requestAnimationFrame(() => { if (UI.schedPast) $('#day-' + today)?.scrollIntoView({ block: 'start' }); });
     return out;
+  }
+
+  // "1:20 PM" -> "1:20" (afternoon times are the norm here; mornings keep "am")
+  const shortTime = t => { const x = T.time(t); return /PM$/.test(x) ? x.replace(/\s?PM$/, '') : x.replace(/\s?AM$/, 'am'); };
+  // Cached open-times lookups for the Schedule (re-checked when bookings change or after 2 min)
+  const OPEN = { sig: '', at: 0, days: new Map() };
+  function openTimes(staff, day, dur, lastMinute) {
+    if (!staff) return Promise.resolve(null);
+    const sig = [staff.id, dur, D.appointments.filter(a => a.staff_id === staff.id).map(a => a.id + a.status + a.starts_at + a.ends_at).join(), D.time_off.map(o => o.id + o.starts_at + o.ends_at).join(), D.working_hours.map(w => w.weekday + w.start_time + w.end_time).join(), JSON.stringify(S())].join('|');
+    if (sig !== OPEN.sig || Date.now() - OPEN.at > 12e4) { OPEN.sig = sig; OPEN.at = Date.now(); OPEN.days.clear(); }
+    const key = day + (lastMinute ? '*' : '');
+    if (!OPEN.days.has(key)) {
+      const staffRules = lastMinute || !S().booking_open || !staff.accepts_online;
+      OPEN.days.set(key, LC.rpc(staffRules ? 'get_available_slots_staff' : 'get_available_slots', { p_staff_id: staff.id, p_day: day, p_duration: dur })
+        .then(list => (list || []).filter(t => +new Date(t) > Date.now()))
+        .catch(() => { OPEN.days.delete(key); return null; }));
+    }
+    return OPEN.days.get(key);
   }
 
   function viewCalendar() {
